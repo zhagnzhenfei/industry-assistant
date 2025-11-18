@@ -13,27 +13,7 @@
 
 ## 快速开始
 
-### 方法一：使用Docker Compose（推荐）
-
-```bash
-# 进入项目根目录
-cd /home/ubuntu/industry_assistant
-
-# 启动所有服务
-cd backend
-docker-compose up -d
-
-# 查看服务状态
-docker-compose ps
-
-# 查看日志
-docker-compose logs -f [service_name]
-
-# 停止服务
-docker-compose down
-```
-
-### 方法二：分别启动前后端
+### 方法一：分别启动前后端
 
 #### 后端启动
 
@@ -45,15 +25,11 @@ cd backend
 cp .env.example .env
 # 编辑 .env 文件，填入必要的配置
 
-# 安装依赖
-cd app
-pip install -r requirements.txt
+# 编辑docker-compose.yaml文件
+# 修改nltk_data挂载目录
+# 启动项目
+docker compose up -d --build
 
-# 创建数据库表
-python scripts/create_memory_tables.py --action create
-
-# 启动主应用服务
-uvicorn app_main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 #### 前端启动
@@ -68,19 +44,7 @@ npm install
 # 启动开发服务器
 npm run dev
 
-# 构建生产版本
-npm run build
 ```
-
-## 服务访问地址
-
-启动成功后，可以通过以下地址访问各服务：
-
-- **前端应用**: http://localhost:5173
-- **后端API**: http://localhost:8001
-- **MCP服务**: http://localhost:8000
-- **API文档**: http://localhost:8001/docs
-- **MCP文档**: http://localhost:8000/docs
 
 ## 环境配置
 
