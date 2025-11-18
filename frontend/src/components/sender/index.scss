@@ -1,0 +1,44 @@
+.com-sender {
+  background-color: #e9f5ff;
+  border-radius: 15px;
+
+  .ant-input {
+    background: transparent;
+    border: none;
+    padding: 14px 16px;
+    color: #474946;
+    box-shadow: none;
+
+    &::placeholder {
+      color: #6f798b;
+    }
+  }
+
+  .com-sender__actions {
+    display: flex;
+    justify-content: space-between;
+    padding: 14px 16px;
+    padding-top: 0;
+
+    .ant-btn {
+      --ant-button-padding-inline: 4px;
+
+      img {
+        width: 22px;
+        height: 22px;
+        -webkit-user-drag: none;
+      }
+    }
+  }
+
+  .com-sender__footer {
+    margin-top: 20px;
+    color: #6f798b;
+
+    .ant-switch {
+      --ant-switch-track-height: 30px;
+      --ant-switch-handle-size: 26px;
+      --ant-switch-track-min-width: 56px;
+    }
+  }
+}

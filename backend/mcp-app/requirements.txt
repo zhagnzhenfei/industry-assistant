@@ -1,0 +1,31 @@
+# 核心Web框架 - 使用兼容版本
+fastapi>=0.108.0
+uvicorn[standard]>=0.24.0
+
+# 数据验证和序列化
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# 异步HTTP客户端
+httpx>=0.25.2
+
+# 环境变量管理
+python-dotenv>=1.0.0
+
+# 日志和文件处理
+aiofiles>=23.2.1
+
+# 类型提示支持
+typing-extensions>=4.8.0
+
+# MCP SDK - 使用兼容版本
+mcp>=1.1.0
+
+# PostgreSQL支持
+asyncpg>=0.29.0
+
+# SQL解析和验证
+sqlparse>=0.4.4
+
+# 图结构处理
+networkx>=3.1

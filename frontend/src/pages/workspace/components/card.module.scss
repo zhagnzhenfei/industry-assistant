@@ -1,0 +1,34 @@
+.workspace-card {
+  flex-basis: calc((100% - 60px) / 4);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 245px;
+  cursor: pointer;
+  transition: box-shadow 0.3s ease-in-out;
+
+  &:hover {
+    box-shadow: 4px 4px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  @media (max-width: 1160px) {
+    flex-basis: calc((100% - 60px) / 2);
+  }
+
+  @media (max-width: 768px) {
+    flex-basis: 100%;
+  }
+
+  .workspace-card__title {
+    margin-top: 45px;
+    font-size: 28px;
+    font-weight: bold;
+  }
+
+  .workspace-card__desc {
+    font-size: 12px;
+  }
+}

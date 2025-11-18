@@ -1,0 +1,7 @@
+.com-form-modal {
+  &.ant-modal .ant-modal-footer {
+    position: sticky;
+    bottom: 20px;
+    z-index: 2;
+  }
+}

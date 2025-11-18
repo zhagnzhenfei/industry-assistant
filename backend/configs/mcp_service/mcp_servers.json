@@ -1,0 +1,23 @@
+{
+  "servers": {
+    "fetch": {
+      "id": "fetch",
+      "name": "网页内容抓取服务器",
+      "description": "提供网页内容抓取功能的MCP服务器，将HTML转换为markdown",
+      "type": "sse",
+      "url": "https://mcp.api-inference.modelscope.net/fb67ec4f84934e/sse",
+      "command": null,
+      "args": null,
+      "env": null,
+      "headers": null,
+      "is_active": true,
+      "status": "inactive",
+      "timeout": 60,
+      "version": "1.0.0",
+      "author": null,
+      "tags": [],
+      "created_at": null,
+      "last_connected": null
+    }
+  }
+}

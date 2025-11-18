@@ -1,0 +1,630 @@
+{
+  "tools": [
+    {
+      "id": "python_executor",
+      "name": "Python代码执行器",
+      "description": "安全执行Python代码片段，支持基础语法和数学运算",
+      "type": "function",
+      "config": {
+        "function_name": "execute_python_code"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "要执行的Python代码"
+          },
+          "include_output": {
+            "type": "boolean",
+            "description": "是否包含输出结果",
+            "default": true
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "nodejs_executor",
+      "name": "Node.js代码执行器",
+      "description": "执行Node.js代码片段，支持JavaScript基础功能",
+      "type": "function",
+      "config": {
+        "function_name": "execute_nodejs_code"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "要执行的Node.js代码"
+          },
+          "include_output": {
+            "type": "boolean",
+            "description": "是否包含输出结果",
+            "default": true
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "shell_executor",
+      "name": "Shell命令执行器",
+      "description": "执行Shell命令，支持基础文件和系统操作",
+      "type": "function",
+      "config": {
+        "function_name": "execute_shell_command"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "要执行的Shell命令"
+          },
+          "include_output": {
+            "type": "boolean",
+            "description": "是否包含输出结果",
+            "default": true
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "file_reader",
+      "name": "文件读取器",
+      "description": "读取文件内容，支持多种编码格式",
+      "type": "function",
+      "config": {
+        "function_name": "read_file_content"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "要读取的文件路径"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "文件编码格式",
+            "default": "utf-8"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "file_writer",
+      "name": "文件写入器",
+      "description": "写入文件内容，支持自动创建目录",
+      "type": "function",
+      "config": {
+        "function_name": "write_file_content"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "要写入的文件路径"
+          },
+          "content": {
+            "type": "string",
+            "description": "要写入的内容"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "文件编码格式",
+            "default": "utf-8"
+          },
+          "create_dirs": {
+            "type": "boolean",
+            "description": "是否自动创建目录",
+            "default": true
+          }
+        },
+        "required": [
+          "file_path",
+          "content"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "file_search",
+      "name": "文件搜索器",
+      "description": "搜索文件和目录，支持文件名和内容搜索",
+      "type": "function",
+      "config": {
+        "function_name": "search_files_and_content"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "搜索模式（支持正则表达式）"
+          },
+          "search_path": {
+            "type": "string",
+            "description": "搜索路径",
+            "default": "."
+          },
+          "recursive": {
+            "type": "boolean",
+            "description": "是否递归搜索子目录",
+            "default": true
+          },
+          "file_type": {
+            "type": "string",
+            "description": "文件类型过滤（all/text/code/config）",
+            "default": "all"
+          }
+        },
+        "required": [
+          "pattern"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "directory_list",
+      "name": "目录列表器",
+      "description": "列出目录内容，支持详细信息显示",
+      "type": "function",
+      "config": {
+        "function_name": "list_directory_contents"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "dir_path": {
+            "type": "string",
+            "description": "要列出的目录路径",
+            "default": "."
+          },
+          "include_hidden": {
+            "type": "boolean",
+            "description": "是否包含隐藏文件",
+            "default": false
+          },
+          "details": {
+            "type": "boolean",
+            "description": "是否显示详细信息",
+            "default": true
+          }
+        }
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "git_status",
+      "name": "Git状态检查器",
+      "description": "获取Git仓库的当前状态，包括分支信息和文件变更",
+      "type": "function",
+      "config": {
+        "function_name": "get_git_status"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "Git仓库路径",
+            "default": "."
+          }
+        }
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "git_commit",
+      "name": "Git提交器",
+      "description": "提交Git更改，支持指定文件列表",
+      "type": "function",
+      "config": {
+        "function_name": "commit_git_changes"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "提交消息"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "要提交的文件列表（可选）"
+          },
+          "repo_path": {
+            "type": "string",
+            "description": "Git仓库路径",
+            "default": "."
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "git_branch_manager",
+      "name": "Git分支管理器",
+      "description": "创建和切换Git分支",
+      "type": "function",
+      "config": {
+        "function_name": "manage_git_branches"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "create",
+              "switch",
+              "info"
+            ],
+            "description": "分支操作类型"
+          },
+          "branch_name": {
+            "type": "string",
+            "description": "分支名称"
+          },
+          "checkout": {
+            "type": "boolean",
+            "description": "创建分支后是否立即切换",
+            "default": true
+          },
+          "repo_path": {
+            "type": "string",
+            "description": "Git仓库路径",
+            "default": "."
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "git_push_pull",
+      "name": "Git同步器",
+      "description": "推送和拉取Git更改",
+      "type": "function",
+      "config": {
+        "function_name": "sync_git_changes"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "push",
+              "pull",
+              "fetch"
+            ],
+            "description": "同步操作类型"
+          },
+          "remote": {
+            "type": "string",
+            "description": "远程仓库名称",
+            "default": "origin"
+          },
+          "branch": {
+            "type": "string",
+            "description": "分支名称（可选）"
+          },
+          "repo_path": {
+            "type": "string",
+            "description": "Git仓库路径",
+            "default": "."
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "git_history",
+      "name": "Git历史查看器",
+      "description": "查看Git提交历史",
+      "type": "function",
+      "config": {
+        "function_name": "get_git_history"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "max_count": {
+            "type": "integer",
+            "description": "最大提交数量",
+            "default": 10
+          },
+          "repo_path": {
+            "type": "string",
+            "description": "Git仓库路径",
+            "default": "."
+          }
+        }
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "db_connection_test",
+      "name": "数据库连接测试器",
+      "description": "测试数据库连接是否成功",
+      "type": "function",
+      "config": {
+        "function_name": "test_database_connection"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "db_type": {
+            "type": "string",
+            "enum": [
+              "sqlite",
+              "postgresql"
+            ],
+            "description": "数据库类型"
+          },
+          "connection_params": {
+            "type": "object",
+            "description": "连接参数",
+            "properties": {
+              "database": {
+                "type": "string",
+                "description": "数据库名称或路径"
+              },
+              "host": {
+                "type": "string",
+                "description": "数据库主机地址"
+              },
+              "port": {
+                "type": "integer",
+                "description": "数据库端口"
+              },
+              "user": {
+                "type": "string",
+                "description": "数据库用户"
+              },
+              "password": {
+                "type": "string",
+                "description": "数据库密码"
+              }
+            }
+          }
+        },
+        "required": [
+          "db_type",
+          "connection_params"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "db_query_executor",
+      "name": "数据库查询执行器",
+      "description": "执行SQL查询语句",
+      "type": "function",
+      "config": {
+        "function_name": "execute_database_query"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "db_type": {
+            "type": "string",
+            "enum": [
+              "sqlite",
+              "postgresql"
+            ],
+            "description": "数据库类型"
+          },
+          "connection_params": {
+            "type": "object",
+            "description": "连接参数"
+          },
+          "query": {
+            "type": "string",
+            "description": "SQL查询语句"
+          },
+          "params": {
+            "type": "array",
+            "items": {},
+            "description": "查询参数（可选）"
+          }
+        },
+        "required": [
+          "db_type",
+          "connection_params",
+          "query"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "db_info_getter",
+      "name": "数据库信息查看器",
+      "description": "获取数据库结构信息，包括表和字段",
+      "type": "function",
+      "config": {
+        "function_name": "get_database_info"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "db_type": {
+            "type": "string",
+            "enum": [
+              "sqlite",
+              "postgresql"
+            ],
+            "description": "数据库类型"
+          },
+          "connection_params": {
+            "type": "object",
+            "description": "连接参数"
+          }
+        },
+        "required": [
+          "db_type",
+          "connection_params"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    },
+    {
+      "id": "project_initializer",
+      "name": "项目初始化器",
+      "description": "初始化新项目目录结构",
+      "type": "function",
+      "config": {
+        "function_name": "initialize_project"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "project_name": {
+            "type": "string",
+            "description": "项目名称"
+          },
+          "project_type": {
+            "type": "string",
+            "enum": [
+              "python",
+              "nodejs",
+              "web",
+              "api"
+            ],
+            "description": "项目类型"
+          },
+          "base_path": {
+            "type": "string",
+            "description": "项目基础路径",
+            "default": "."
+          },
+          "include_git": {
+            "type": "boolean",
+            "description": "是否初始化Git仓库",
+            "default": true
+          },
+          "include_readme": {
+            "type": "boolean",
+            "description": "是否创建README文件",
+            "default": true
+          }
+        },
+        "required": [
+          "project_name",
+          "project_type"
+        ]
+      },
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "category": "development",
+      "author": "Local Dev Tools",
+      "output_schema": null
+    }
+  ]
+}

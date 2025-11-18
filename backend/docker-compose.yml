@@ -1,0 +1,220 @@
+version: '3.8'
+
+# 定义网络
+networks:
+  app-network:
+    driver: bridge
+    name: app-network
+
+# 定义数据卷
+volumes:
+  postgres-data:
+    name: postgres-data
+  redis-data:
+    name: redis-data
+  mcp-configs:
+    name: mcp-configs
+  mcp-logs:
+    name: mcp-logs
+
+services:
+  # 主应用服务
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: app
+    hostname: app
+    ports:
+      - "8001:8001"
+    networks:
+      - app-network
+    volumes:
+      - ./app:/app
+      - ./app/uploads:/app/uploads
+      - /home/ubuntu/nltk_data:/usr/local/nltk_data
+    env_file:
+      - .env
+    environment:
+      # 应用配置
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8001
+
+      # MCP客户端配置
+      - MCP_CLIENT_URL=http://mcp-service:8000
+
+      # Python环境配置
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus-standalone:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "service.type=main-app"
+      - "service.description=主应用服务"
+
+  # MCP基础服务
+  mcp-service:
+    build:
+      context: ./mcp-app
+      dockerfile: Dockerfile
+    container_name: mcp-service
+    hostname: mcp-service
+    networks:
+      - app-network
+    volumes:
+      - mcp-configs:/app/configs
+      - mcp-logs:/app/logs
+    environment:
+      # 应用配置
+      - APP_NAME=MCP Base Service
+      - APP_VERSION=1.0.0
+      - DEBUG=false
+      
+      # 服务器配置
+      - HOST=0.0.0.0
+      - PORT=8000
+      
+      # 日志配置
+      - LOG_LEVEL=INFO
+      
+      # Python环境配置
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    restart: unless-stopped
+    ports:
+      - 8000:8000
+    labels:
+      - "service.type=mcp-base"
+      - "service.description=MCP基础服务，提供工具管理和执行功能"
+
+  # PostgreSQL 数据库服务
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    hostname: postgres
+    networks:
+      - app-network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./app/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      - POSTGRES_DB=app_db
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=app_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d app_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "service.type=database"
+      - "service.description=PostgreSQL数据库服务"
+
+  # Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    hostname: redis
+    networks:
+      - app-network
+    volumes:
+      - redis-data:/data
+    environment:
+      - REDIS_PASSWORD=redis_password
+    command: redis-server --requirepass redis_password --appendonly yes --appendfsync everysec
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "service.type=cache"
+      - "service.description=Redis缓存服务"
+
+
+  # Milvus etcd 服务
+  milvus-etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.5
+    networks:
+      - app-network
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ./volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    labels:
+      - "service.type=milvus-etcd"
+      - "service.description=Milvus etcd服务"
+
+  # Milvus MinIO 服务
+  milvus-minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    networks:
+      - app-network
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - ./volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    labels:
+      - "service.type=milvus-minio"
+      - "service.description=Milvus MinIO对象存储服务"
+
+  # Milvus 向量数据库服务
+  milvus-standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.3.3
+    command: ["milvus", "run", "standalone"]
+    networks:
+      - app-network
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    volumes:
+      - ./volumes/milvus:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+    restart: unless-stopped
+    labels:
+      - "service.type=milvus"
+      - "service.description=Milvus向量数据库服务"
+

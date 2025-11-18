@@ -1,0 +1,70 @@
+.newchat-page {
+  padding: 28px 40px;
+  margin: 0 auto;
+  max-width: 862px;
+  min-width: 400px;
+
+  .newchat-page__header {
+    text-align: center;
+    font-weight: bold;
+    font-size: 28px;
+  }
+
+  .newchat-page__sender {
+    margin-top: 20px;
+  }
+
+  .newchat-page__recommend {
+    margin-top: 27px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+
+    .newchat-page__recommend-title {
+      flex-shrink: 0;
+      color: #000000;
+      font-size: 20px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+
+      .icon {
+        width: 32px;
+        height: 32px;
+        background-color: #e7f4ff;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        > img {
+          width: 27px;
+          height: 27px;
+        }
+      }
+    }
+  }
+
+  .newchat-page__questions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 30px;
+    margin-left: 48px;
+
+    .newchat-page__question {
+      color: #6f798b;
+      padding: 6px 0;
+      cursor: pointer;
+      max-width: 100%;
+
+      &:hover {
+        opacity: 0.8;
+      }
+    }
+  }
+
+  .newchat-page__news {
+    margin-top: 67px;
+  }
+}

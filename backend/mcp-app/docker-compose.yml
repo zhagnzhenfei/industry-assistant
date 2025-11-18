@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  mcp-service:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - mcp_configs:/app/configs
+      - mcp_logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+volumes:
+  mcp_configs:
+  mcp_logs:
