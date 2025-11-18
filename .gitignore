@@ -293,8 +293,7 @@ backend/app/service/core/rag/res/deepdoc/
 *.safetensors
 *.bin
 
-# Model files
-models/
+# Model files (but keep application database models)
 model_files/
 model_weights/
 weights/
