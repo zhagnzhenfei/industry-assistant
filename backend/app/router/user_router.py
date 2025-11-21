@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from service.auth_service import AuthService
 from schemas.user import (
-    UserRegister, UserLogin, UserInfo, TokenResponse, UserResponse, 
+    UserRegister, UserLogin, UserInfo, UserResponse, 
     PasswordChange, UserUpdate
 )
 
@@ -61,7 +61,6 @@ async def register(
                 detail=result.message
             )
         
-        # 返回简化格式，与你之前的开发保持一致
         return {"message": "User registered successfully"}
         
     except Exception as e:
@@ -88,7 +87,6 @@ async def login(
     try:
         result = auth_service.login_user(login_data)
         
-        # 返回简化格式，与你之前的开发保持一致
         return {
             "access_token": result.access_token,
             "token_type": result.token_type
@@ -97,7 +95,7 @@ async def login(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
+            detail="用户名或密码错误"  # 统一错误消息，不泄露具体错误原因
         )
 
 
@@ -185,24 +183,6 @@ async def update_profile(
         )
 
 
-@router.post("/logout", response_model=Dict[str, str], status_code=status.HTTP_200_OK)
-async def logout(current_user: UserInfo = Depends(get_current_user)):
-    """
-    用户登出接口
-    
-    注意：由于使用JWT，无法在服务端直接使令牌失效。
-    客户端应该删除存储的令牌来实现登出。
-    
-    Args:
-        current_user: 通过JWT认证的当前用户
-        
-    Returns:
-        登出成功消息
-    """
-    return {
-        "message": "登出成功，请删除客户端存储的令牌",
-        "username": current_user.username
-    }
 
 
 @router.get("/verify-token", response_model=Dict[str, Any], status_code=status.HTTP_200_OK)

@@ -255,7 +255,6 @@ async def search_documents(
             top_k=request.top_k,
             similarity_threshold=request.similarity_threshold,
             category=request.category,
-            confidence_min=request.confidence_min,
             enable_hybrid_search=request.enable_hybrid_search,
             vector_weight=request.vector_weight,
             text_threshold=request.text_threshold

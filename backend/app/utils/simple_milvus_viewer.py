@@ -80,7 +80,7 @@ async def view_collection_data(collection_name: str, limit: int = 3):
         try:
             results = collection.query(
                 expr="id >= 0",
-                output_fields=["id", "doc_id", "doc_name", "category", "confidence", "source", "content"],
+                output_fields=["id", "doc_id", "doc_name", "category", "source", "content"],
                 limit=limit
             )
 
@@ -146,7 +146,7 @@ async def search_test(collection_name: str, query_text: str = "人工智能"):
             anns_field="vector",
             param={"metric_type": "COSINE", "params": {"ef": 64}},
             limit=5,
-            output_fields=["id", "doc_id", "doc_name", "category", "confidence", "source", "content"],
+            output_fields=["id", "doc_id", "doc_name", "category", "source", "content"],
             consistency_level="Strong"
         )
 

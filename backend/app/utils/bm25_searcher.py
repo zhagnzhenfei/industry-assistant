@@ -275,7 +275,7 @@ async def search_milvus_with_bm25(collection_name: str, query: str,
         # 在实际应用中，可以考虑使用更高效的搜索策略
         results = collection.query(
             expr="id >= 0",
-            output_fields=["id", "content", "doc_id", "doc_name", "category", "confidence", "source", "metadata"],
+            output_fields=["id", "content", "doc_id", "doc_name", "category", "source", "metadata"],
             limit=1000  # 限制获取数量，避免性能问题
         )
 

@@ -200,7 +200,6 @@ async def search_specific_data(collection_name: str, query_text: str = "人工�
             print(f"Doc ID: {result.doc_id}")
             print(f"Doc Name: {result.doc_name}")
             print(f"Category: {result.category}")
-            print(f"Confidence: {result.confidence}")
             print(f"Chunk ID: {result.chunk_id}")
             print(f"Source: {result.source}")
             print(f"Content: {result.content[:200]}...")

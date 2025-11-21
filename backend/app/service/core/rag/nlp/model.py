@@ -57,12 +57,15 @@ def generate_embedding(text: str, api_key: str = None, base_url: str = None, mod
     }
 
     try:
+        import time
+        start_time = time.time()
         response = requests.post(url, headers=headers, json=data, timeout=30)
+        api_latency = time.time() - start_time
         response.raise_for_status()
 
         result = response.json()
         embedding = result["data"][0]["embedding"]
-        print(f"✅ 成功使用 {model_name} 生成{len(embedding)}维嵌入向量")
+        print(f"✅ 成功使用 {model_name} 生成{len(embedding)}维嵌入向量 (API耗时: {api_latency:.3f}s)")
         return embedding
 
     except Exception as e:

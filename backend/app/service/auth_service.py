@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
@@ -15,6 +16,9 @@ class AuthService:
     
     def __init__(self):
         """初始化认证服务"""
+        # 日志记录器
+        self.logger = logging.getLogger(__name__)
+        
         # JWT配置
         self.secret_key = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-this-in-production')
         self.algorithm = os.environ.get('JWT_ALGORITHM', 'HS256')
@@ -152,14 +156,31 @@ class AuthService:
                 user = db.query(User).filter(User.username == login_data.username).first()
                 
                 if not user:
+                    # 记录详细日志：用户不存在
+                    self.logger.warning(
+                        f"登录失败: 用户不存在 - 用户名: {login_data.username}"
+                    )
                     raise Exception("用户名或密码错误")
                 
                 # 验证密码
                 if not self.verify_password(login_data.password, user.password_hash):
+                    # 记录详细日志：密码错误（不记录密码内容）
+                    self.logger.warning(
+                        f"登录失败: 密码错误 - 用户名: {login_data.username}, 用户ID: {user.user_id}"
+                    )
                     raise Exception("用户名或密码错误")
                 
                 if not user.is_active:
+                    # 记录详细日志：账户被禁用
+                    self.logger.warning(
+                        f"登录失败: 账户已禁用 - 用户名: {login_data.username}, 用户ID: {user.user_id}"
+                    )
                     raise Exception("账户已被禁用")
+                
+                # 登录成功
+                self.logger.info(
+                    f"用户登录成功 - 用户名: {login_data.username}, 用户ID: {user.user_id}"
+                )
                 
                 # 创建访问令牌
                 access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
@@ -177,7 +198,11 @@ class AuthService:
                 db.close()  # 关闭会话
                 
         except Exception as e:
-            print(f"用户登录失败: {e}")
+            # 记录完整的错误堆栈（用于排查问题）
+            self.logger.error(
+                f"用户登录异常 - 用户名: {login_data.username}",
+                exc_info=True  # 这会记录完整的 traceback
+            )
             raise e
     
     def get_current_user(self, token: str) -> Optional[UserInfo]:

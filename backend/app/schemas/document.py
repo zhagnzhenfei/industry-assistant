@@ -66,7 +66,6 @@ class MilvusSearchRequest(BaseModel):
     top_k: int = Field(10, description="返回结果数量")
     similarity_threshold: float = Field(0.2, description="相似度阈值")
     category: Optional[str] = Field(None, description="文档类别过滤")
-    confidence_min: Optional[float] = Field(None, description="最小置信度过滤")
     # 混合检索参数
     enable_hybrid_search: bool = Field(False, description="是否启用混合检索（向量+文本）")
     vector_weight: float = Field(0.5, description="向量检索权重，范围0-1，文本权重自动计算为1-vector_weight", ge=0, le=1)
@@ -82,7 +81,6 @@ class MilvusSearchResult(BaseModel):
     doc_id: str = Field(..., description="文档ID")
     doc_name: str = Field(..., description="文档名称")
     category: Optional[str] = Field(None, description="文档类别")
-    confidence: float = Field(..., description="置信度")
     source: Optional[str] = Field(None, description="来源")
     chunk_id: Optional[str] = Field(None, description="分块ID")
     # 混合检索字段

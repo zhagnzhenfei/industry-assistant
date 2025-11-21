@@ -164,22 +164,27 @@ class DocumentManagementService:
                             port=os.getenv("MILVUS_PORT", "19530")
                         )
 
-                    if not utility.has_collection(collection_name):
-                        print(f"创建Milvus集合: {collection_name}")
-                        config = CollectionConfig(collection_name=collection_name)
-                        success = milvus_service.create_collection_sync(collection_name, config)
-                        if success:
+                    print(f"🔍 检查Milvus集合: {collection_name}")
+
+                    # 强制调用create_collection_sync来检查和可能重建集合
+                    # 无论集合是否存在，都要检查schema是否正确
+                    config = CollectionConfig(collection_name=collection_name)
+                    success = milvus_service.create_collection_sync(collection_name, config)
+
+                    if success:
+                        if not utility.has_collection(collection_name):
                             print("✅ Milvus集合创建成功")
-                            # 创建索引
-                            index_success = milvus_service.create_index_sync(collection_name, "vector")
-                            if index_success:
-                                print("✅ Milvus索引创建成功")
-                            else:
-                                print("❌ Milvus索引创建失败")
                         else:
-                            print("❌ Milvus集合创建失败")
+                            print("✅ Milvus集合检查/重建成功")
+
+                        # 创建索引（如果需要）
+                        index_success = milvus_service.create_index_sync(collection_name, "vector")
+                        if index_success:
+                            print("✅ Milvus索引创建成功")
+                        else:
+                            print("❌ Milvus索引创建失败")
                     else:
-                        print(f"集合 {collection_name} 已存在")
+                        print("❌ Milvus集合创建失败")
                 except Exception as e:
                     print(f"Milvus集合操作失败: {e}")
                     use_milvus = False
@@ -192,8 +197,11 @@ class DocumentManagementService:
                     print(f"处理分块 {i+1}/{len(chunks)}...")
                     print(chunk_data)
 
-                    # 生成chunk_id
-                    chunk_id = xxhash.xxh64(f"{chunk_data['content_with_weight']}{user_id}".encode("utf-8")).hexdigest()
+                    # 生成唯一的chunk_id，包含文档唯一标识和分块索引
+                    doc_unique_id = chunk_data.get('doc_id', file_name) or file_name
+                    unique_string = f"{doc_unique_id}_{user_id}_{i}_{chunk_data['content_with_weight']}"
+                    chunk_id = xxhash.xxh64(unique_string.encode("utf-8")).hexdigest()
+                    print(f"🔧 生成chunk_id: {chunk_id} (文档: {doc_unique_id}, 分块: {i})")
 
                     # 生成向量嵌入
                     embedding = generate_embedding(chunk_data['content_with_weight'])
@@ -209,7 +217,6 @@ class DocumentManagementService:
                             kb_id=user_id,
                             chunk_id=chunk_id,
                             category="document",
-                            confidence=chunk_data.get('confidence', 0.8),
                             timestamp=int(time.time()),
                             source=file_name,
                             keywords="",
@@ -226,6 +233,16 @@ class DocumentManagementService:
             # 批量插入到Milvus
             if use_milvus and milvus_chunks:
                 print(f"插入数据到Milvus，共 {len(milvus_chunks)} 条...")
+                print(f"🔍 Milvus集合检查: {collection_name}")
+
+                # 打印第一个chunk的字段信息
+                if milvus_chunks:
+                    first_chunk = milvus_chunks[0]
+                    print(f"🔍 第一个chunk的字段: {first_chunk}")
+                    if hasattr(first_chunk, '__dict__'):
+                        chunk_fields = list(first_chunk.__dict__.keys())
+                        print(f"🔍 Chunk字段数量: {len(chunk_fields)}, 字段名: {chunk_fields}")
+
                 success = milvus_service.insert_data_sync(collection_name, milvus_chunks)
                 if success:
                     print("✅ Milvus插入成功")
@@ -250,7 +267,6 @@ class DocumentManagementService:
 
     async def search_documents_with_milvus(self, user_id: str, query: str, top_k: int = 10,
                                          similarity_threshold: float = 0.2, category: Optional[str] = None,
-                                         confidence_min: Optional[float] = None,
                                          enable_hybrid_search: bool = False,
                                          vector_weight: float = 0.5,
                                          text_threshold: float = 0.3) -> MilvusSearchResponse:
@@ -262,7 +278,6 @@ class DocumentManagementService:
             top_k: 返回结果数量
             similarity_threshold: 向量相似度阈值
             category: 文档类别过滤
-            confidence_min: 最小置信度过滤
             enable_hybrid_search: 是否启用混合检索
             vector_weight: 向量检索权重，范围0-1，文本权重自动计算为1-vector_weight
             text_threshold: 文本相关性阈值
@@ -354,8 +369,10 @@ class DocumentManagementService:
                 # 生成查询向量
                 try:
                     from service.core.rag.nlp.model import generate_embedding
+                    embed_start = time.time()
                     query_vector = generate_embedding(query)
-                    print(f"✅ 查询向量生成成功，维度: {len(query_vector)}")
+                    embed_time = time.time() - embed_start
+                    print(f"✅ 查询向量生成成功，维度: {len(query_vector)} (耗时: {embed_time:.3f}s)")
                 except Exception as e:
                     print(f"❌ 生成查询向量失败: {e}")
                     if not enable_hybrid_search:
@@ -377,8 +394,6 @@ class DocumentManagementService:
                 filter_parts = []
                 if category:
                     filter_parts.append(f'category == "{category}"')
-                if confidence_min is not None:
-                    filter_parts.append(f'confidence >= {confidence_min}')
 
                 filter_expr = " AND ".join(filter_parts) if filter_parts else None
 
@@ -389,17 +404,21 @@ class DocumentManagementService:
                     # 确定向量搜索获取足够的候选结果
                     # 混合搜索时获取更多候选进行rerank，纯向量搜索时使用top_k
                     vector_search_size = top_k if not enable_hybrid_search else min(50, top_k * 3)
+                    
+                    milvus_start = time.time()
                     search_results = await milvus_service.search(
                         collection_name=collection_name,
                         query_vector=query_vector,
                         top_k=vector_search_size,
                         filter_expr=filter_expr,
-                        output_fields=["content", "doc_id", "doc_name", "category", "confidence", "source", "metadata", "chunk_id"],
+                        output_fields=["content", "doc_id", "doc_name", "category", "source", "metadata", "chunk_id"],
                         search_params={
                             "metric_type": "COSINE",
                             "params": {"ef": 64}
                         }
                     )
+                    milvus_time = time.time() - milvus_start
+                    print(f"✅ Milvus搜索执行完成 (耗时: {milvus_time:.3f}s)")
 
                     search_time = time.time() - start_time
 
@@ -468,7 +487,6 @@ class DocumentManagementService:
                         doc_id=result.get('doc_id', ''),
                         doc_name=result.get('doc_name', ''),
                         category=result.get('category', ''),
-                        confidence=result.get('confidence', 0.0),
                         source=result.get('source', ''),
                         chunk_id=result.get('chunk_id', ''),
                         text_score=result.get('text_score', 0.0),
@@ -485,7 +503,6 @@ class DocumentManagementService:
                         doc_id=getattr(result, 'doc_id', ''),
                         doc_name=getattr(result, 'doc_name', ''),
                         category=getattr(result, 'category', ''),
-                        confidence=getattr(result, 'confidence', 0.0),
                         source=getattr(result, 'source', ''),
                         chunk_id=getattr(result, 'chunk_id', ''),
                         text_score=getattr(result, 'text_score', 0.0),
@@ -520,36 +537,49 @@ class DocumentManagementService:
     def _perform_text_search(self, user_id: str, query: str, top_k: int, text_threshold: float) -> List[dict]:
         """执行基于BM25的文本搜索（优化版本）"""
         print(f"🔍 开始BM25文本搜索: '{query}' (阈值: {text_threshold})")
+        
+        import time
+        text_search_start = time.time()
+        
         try:
             from pymilvus import Collection, utility
             import sys
             from pathlib import Path
-
+            
             # 导入BM25搜索器
             sys.path.append(str(Path(__file__).parent.parent))
             from utils.bm25_searcher import BM25Searcher
-
+            
             collection_name = f"user_collection_{user_id}".replace("-", "_")
             collection = Collection(collection_name)
             
             # 优化1：检查加载状态，避免重复加载
             try:
+                load_start = time.time()
                 load_state = utility.load_state(collection_name)
                 if load_state.name not in ['Loaded', 'Loading']:
                     collection.load()
+                load_time = time.time() - load_start
+                if load_time > 1.0:
+                    print(f"⚠️ 集合加载检查/加载耗时: {load_time:.3f}s")
             except:
                 collection.load()
-
+            
             # 优化2：智能候选文档选择策略
             # 先通过向量搜索获取相关候选，再对候选进行BM25评分
             candidate_limit = min(50, top_k * 5)  # 动态调整，但最多50个
             
             # 策略1：先进行快速向量搜索获取相关候选文档
             print(f"🔍 使用向量搜索预筛选候选文档...")
+            
+            pre_filter_start = time.time()
             try:
                 # 生成查询向量
                 from service.core.rag.nlp.model import generate_embedding
+                
+                embed_start = time.time()
                 query_vector = generate_embedding(query)
+                embed_time = time.time() - embed_start
                 
                 # 直接使用 Collection 进行同步向量搜索
                 search_params = {
@@ -558,31 +588,41 @@ class DocumentManagementService:
                 }
                 
                 # 执行向量搜索
+                vec_search_start = time.time()
                 search_results = collection.search(
                     data=[query_vector],
                     anns_field="vector",
                     param=search_params,
                     limit=candidate_limit,
-                    output_fields=["id", "content", "content_ltks", "doc_id", "doc_name", "category", "confidence", "source", "metadata"]
+                    output_fields=["id", "content", "content_ltks", "doc_id", "doc_name", "category", "source", "metadata"]
                 )
+                vec_search_time = time.time() - vec_search_start
                 
                 # 提取搜索结果
                 if search_results and len(search_results) > 0:
                     results = []
                     for hit in search_results[0]:
+                        # 优先使用chunk_id作为唯一标识，如果没有则使用Milvus内部ID
+                        chunk_id = hit.entity.get('chunk_id', '')
+                        unique_id = chunk_id if chunk_id else str(hit.id)
+
+                        print(f"🔍 搜索结果 - chunk_id: {chunk_id}, milvus_id: {hit.id}, 最终id: {unique_id}")
+
                         result_dict = {
-                            'id': hit.id,
+                            'id': unique_id,
+                            'milvus_id': hit.id,  # 保留Milvus内部ID用于调试
                             'content': hit.entity.get('content', ''),
                             'content_ltks': hit.entity.get('content_ltks', ''),
                             'doc_id': hit.entity.get('doc_id', ''),
                             'doc_name': hit.entity.get('doc_name', ''),
                             'category': hit.entity.get('category', ''),
-                            'confidence': hit.entity.get('confidence', 0.0),
                             'source': hit.entity.get('source', ''),
                             'metadata': hit.entity.get('metadata', {})
                         }
                         results.append(result_dict)
-                    print(f"✅ 向量预筛选获得 {len(results)} 个候选文档")
+                    
+                    pre_filter_time = time.time() - pre_filter_start
+                    print(f"✅ 向量预筛选获得 {len(results)} 个候选文档 (总耗时: {pre_filter_time:.3f}s, Embedding: {embed_time:.3f}s, 搜索: {vec_search_time:.3f}s)")
                 else:
                     results = []
                     
@@ -593,36 +633,39 @@ class DocumentManagementService:
                 # 降级方案：随机选择
                 results = collection.query(
                     expr="id >= 0",
-                    output_fields=["id", "content", "content_ltks", "doc_id", "doc_name", "category", "confidence", "source", "metadata"],
+                    output_fields=["id", "content", "content_ltks", "doc_id", "doc_name", "category", "source", "metadata"],
                     limit=candidate_limit
                 )
-
+            
             if not results:
                 return []
-
+            
             # 使用BM25算法进行文本搜索
             print(f"📊 使用BM25算法处理 {len(results)} 个候选文档")
+            
+            bm25_start = time.time()
             bm25_searcher = BM25Searcher(k1=1.2, b=0.75)
-
+            
             # 执行BM25搜索，不使用阈值过滤，获取所有候选进行rerank
             scored_results = bm25_searcher.search_documents(
                 query=query,
                 documents=results,
                 text_threshold=0.0  # 不进行阈值过滤，让rerank决定
             )
-
+            bm25_time = time.time() - bm25_start
+            
             # 处理BM25搜索结果
             text_results = []
             for result in scored_results[:top_k]:
                 # 确保所有必需的字段都存在
                 enhanced_result = result.copy()
                 enhanced_result['chunk_id'] = result.get('metadata', {}).get('chunk_id', str(result.get('id', '')))
-                enhanced_result['confidence'] = result.get('confidence', result.get('text_score', 0.0))
-
+                
                 text_results.append(enhanced_result)
-
-            print(f"✅ BM25搜索完成，找到 {len(text_results)} 个匹配结果")
-
+            
+            text_search_total_time = time.time() - text_search_start
+            print(f"✅ BM25搜索完成，找到 {len(text_results)} 个匹配结果 (BM25计算耗时: {bm25_time:.3f}s, 总耗时: {text_search_total_time:.3f}s)")
+            
             return text_results
 
         except Exception as e:
@@ -697,7 +740,6 @@ class DocumentManagementService:
                         doc_id=text_result.get('doc_id', ''),
                         doc_name=text_result.get('doc_name', ''),
                         category=text_result.get('category', ''),
-                        confidence=text_result.get('confidence', 0.8),
                         source=text_result.get('source', ''),
                         metadata=text_result.get('metadata', {})
                     )
