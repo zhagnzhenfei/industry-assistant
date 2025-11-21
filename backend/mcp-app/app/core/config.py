@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     """应用配置"""
     
     # 应用基本配置
-    app_name: str = Field(default="Generic MCP Service", description="应用名称")
-    app_version: str = Field(default="1.0.0", description="应用版本")
+    app_name: str = Field(default="Standard MCP Gateway", description="应用名称")
+    app_version: str = Field(default="2.0.0", description="应用版本")
     debug: bool = Field(default=True, description="调试模式")
     
     # 服务器配置

@@ -1,262 +1,198 @@
-# Generic MCP Service
+# Standard MCP Gateway
 
-一个专注于工具管理的通用MCP（Model Context Protocol）服务。
+基于标准MCP协议的轻量级网关服务
 
-## 🎯 项目特点
+## 🎯 项目概述
 
-- **轻量级设计**: 专注于核心的工具管理功能，无复杂的业务逻辑
-- **配置驱动**: 通过JSON配置文件动态管理工具
-- **多工具类型支持**: 支持函数、HTTP、STDIO、WebSocket等多种工具类型
-- **RESTful API**: 提供完整的工具管理API接口
-- **易于集成**: 上层应用可以轻松集成和扩展
+这是一个符合Model Context Protocol标准的轻量级网关服务，提供统一的MCP服务器连接管理和工具调用接口。
+
+## 🏗️ 架构特点
+
+- **标准MCP协议**: 完全基于MCP JSON-RPC 2.0协议实现
+- **轻量级设计**: 客户端直接连接MCP服务器，无中间层
+- **多连接类型**: 支持SSE、STDIO、WebSocket等连接方式
+- **动态发现**: 通过MCP协议自动发现工具、资源和提示
+- **简洁API**: RESTful接口设计，易于集成
+
+## 📁 项目结构
+
+```
+mcp-app/
+├── app/
+│   ├── api/
+│   │   └── connections.py      # 统一连接管理API
+│   ├── core/
+│   │   └── config.py           # 应用配置管理
+│   ├── models/
+│   │   └── mcp_models.py       # 标准MCP协议模型
+│   ├── services/
+│   │   ├── mcp_client.py       # MCP客户端
+│   │   ├── mcp_connection_manager.py  # 连接管理器
+│   │   ├── config_manager.py   # 配置管理器
+│   │   └── postgres_server.py  # PostgreSQL服务器实现
+│   └── main.py                 # 应用入口
+├── configs/
+│   └── mcp_servers.json        # MCP服务器配置
+├── backup/                     # 旧代码备份
+├── requirements.txt            # Python依赖
+└── README.md                   # 项目文档
+```
 
 ## 🚀 快速开始
 
-### 1. 环境准备
-
-```bash
-# 确保Python 3.8+
-python --version
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或
-venv\Scripts\activate     # Windows
-```
-
-### 2. 安装依赖
+### 1. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 配置环境
+### 2. 配置服务器
 
-```bash
-# 复制环境变量文件
-cp env.example .env
-
-# 根据需要修改.env文件
-```
-
-### 4. 启动服务
-
-```bash
-# 直接启动
-python -m app.main
-
-# 或使用uvicorn
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 5. 访问服务
-
-- 服务地址: http://localhost:8000
-- API文档: http://localhost:8000/docs
-- 健康检查: http://localhost:8000/health
-
-## 📁 项目结构
-
-```
-python-mcp-app/
-├── app/
-│   ├── main.py                 # 应用入口
-│   ├── core/
-│   │   └── config.py          # 配置管理
-│   ├── models/
-│   │   └── tool_models.py     # 工具数据模型
-│   ├── services/
-│   │   ├── tool_manager.py    # 工具管理器
-│   │   └── execution_service.py # 工具执行服务
-│   └── api/
-│       ├── tools.py           # 工具管理API
-│       └── execution.py       # 工具执行API
-├── configs/
-│   └── tools.json             # 工具配置文件
-├── requirements.txt            # Python依赖
-└── README.md                  # 项目说明
-```
-
-## 🔧 核心功能
-
-### 工具管理
-
-- **添加工具**: 通过API或配置文件添加新工具
-- **删除工具**: 移除不需要的工具
-- **更新工具**: 修改工具配置和属性
-- **启用/禁用**: 控制工具的使用状态
-- **工具搜索**: 按分类、标签、关键词搜索工具
-
-### 工具执行
-
-- **单工具执行**: 执行单个工具
-- **批量执行**: 同时执行多个工具
-- **执行监控**: 查看活跃的执行任务
-- **执行取消**: 取消正在执行的工具
-- **工具测试**: 测试工具配置是否正确
-
-### 工具类型支持
-
-- **Function**: 函数调用类型
-- **HTTP**: HTTP服务类型
-- **STDIO**: 标准输入输出类型
-- **WebSocket**: WebSocket服务类型
-- **Custom**: 自定义类型
-
-## 📖 API接口
-
-### 工具管理接口
-
-- `GET /api/v1/tools` - 获取工具列表
-- `POST /api/v1/tools` - 添加新工具
-- `GET /api/v1/tools/{tool_id}` - 获取特定工具
-- `PUT /api/v1/tools/{tool_id}` - 更新工具
-- `DELETE /api/v1/tools/{tool_id}` - 删除工具
-- `POST /api/v1/tools/{tool_id}/enable` - 启用工具
-- `POST /api/v1/tools/{tool_id}/disable` - 禁用工具
-
-### 工具执行接口
-
-- `POST /api/v1/execution/execute` - 执行工具
-- `POST /api/v1/execution/execute/batch` - 批量执行工具
-- `POST /api/v1/execution/cancel/{request_id}` - 取消执行
-- `GET /api/v1/execution/active` - 获取活跃执行任务
-- `POST /api/v1/execution/test/{tool_id}` - 测试工具
-
-### 系统接口
-
-- `GET /` - 服务信息
-- `GET /health` - 健康检查
-- `GET /info` - 服务详细信息
-
-## ⚙️ 配置说明
-
-### 工具配置文件 (configs/tools.json)
+编辑 `configs/mcp_servers.json` 文件：
 
 ```json
 {
-  "tools": [
-    {
-      "id": "tool_id",
-      "name": "工具名称",
-      "description": "工具描述",
-      "version": "1.0.0",
-      "type": "http",
-      "config": {
-        "url": "https://api.example.com",
-        "method": "GET"
-      },
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "param": {"type": "string"}
-        },
-        "required": ["param"]
-      },
-      "tags": ["tag1", "tag2"],
-      "category": "category",
-      "status": "active"
+  "servers": {
+    "postgres-server": {
+      "id": "postgres-server",
+      "name": "PostgreSQL数据库服务器",
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "app.services.postgres_server"],
+      "is_active": true
     }
-  ]
+  }
 }
 ```
 
-### 环境变量配置
+### 3. 启动服务
 
 ```bash
-# 应用配置
-APP_NAME=Generic MCP Service
-APP_VERSION=1.0.0
-DEBUG=true
-
-# 服务器配置
-HOST=0.0.0.0
-PORT=8000
-
-# 日志配置
-LOG_LEVEL=INFO
+python app/main.py
 ```
+
+服务将在 `http://localhost:8000` 启动
+
+## 📖 API文档
+
+### 连接管理
+
+- `GET /api/v1/connections` - 获取连接列表
+- `POST /api/v1/connections` - 添加新连接
+- `GET /api/v1/connections/{id}` - 获取连接详情
+- `DELETE /api/v1/connections/{id}` - 删除连接
+
+### 连接操作
+
+- `POST /api/v1/connections/{id}/connect` - 连接到服务器
+- `POST /api/v1/connections/{id}/disconnect` - 断开连接
+
+### 工具调用
+
+- `GET /api/v1/connections/{id}/tools` - 获取工具列表
+- `POST /api/v1/connections/{id}/tools/{name}/call` - 调用工具
+- `GET /api/v1/connections/tools/all` - 获取所有可用工具
+
+### 统计信息
+
+- `GET /api/v1/connections/stats/summary` - 获取统计信息
+- `GET /health` - 健康检查
+
+## 🔧 配置说明
+
+### 服务器配置
+
+支持的连接类型：
+
+- **stdio**: 标准输入输出连接
+- **sse**: Server-Sent Events连接
+- **websocket**: WebSocket连接
+
+配置参数：
+
+- `id`: 服务器唯一标识
+- `name`: 服务器名称
+- `type`: 连接类型
+- `command`: 启动命令（stdio类型）
+- `url`: 服务器URL（sse/websocket类型）
+- `args`: 命令参数
+- `env`: 环境变量
+- `timeout`: 超时时间
+- `is_active`: 是否激活
 
 ## 🐳 Docker部署
 
-### 使用Docker Compose
+```dockerfile
+FROM python:3.11-slim
 
-```bash
-# 启动服务
-docker-compose up -d
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-# 查看日志
-docker-compose logs -f
+COPY . .
+EXPOSE 8000
 
-# 停止服务
-docker-compose down
+CMD ["python", "app/main.py"]
 ```
 
-### 使用Docker
+## 📊 监控
+
+### 健康检查
 
 ```bash
-# 构建镜像
-docker build -t generic-mcp-service .
-
-# 运行容器
-docker run -d -p 8000:8000 generic-mcp-service
+curl http://localhost:8000/health
 ```
 
-## 🔍 使用示例
-
-### 1. 添加工具
+### 服务状态
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/tools" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "my_tool",
-    "name": "My Tool",
-    "description": "A custom tool",
-    "type": "http",
-    "config": {"url": "https://api.example.com"},
-    "input_schema": {"type": "object", "properties": {}},
-    "status": "active"
-  }'
+curl http://localhost:8000/api/v1/connections/stats/summary
 ```
 
-### 2. 执行工具
+## 🔍 故障排查
 
-```bash
-curl -X POST "http://localhost:8000/api/v1/execution/execute" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tool_id": "my_tool",
-    "arguments": {"param": "value"}
-  }'
-```
+### 常见问题
 
-### 3. 获取工具列表
+1. **连接失败**
+   - 检查服务器配置是否正确
+   - 验证网络连接和端口可用性
+   - 查看服务日志获取详细错误信息
 
-```bash
-curl "http://localhost:8000/api/v1/tools"
-```
+2. **工具调用失败**
+   - 确认服务器连接状态
+   - 验证工具名称和参数格式
+   - 检查服务器端工具实现
 
-## 🤝 贡献指南
+3. **配置加载失败**
+   - 验证JSON配置文件格式
+   - 检查文件权限
+   - 使用配置导出接口验证
 
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
+## 📚 开发指南
+
+### 添加新的连接类型
+
+1. 在 `mcp_models.py` 中添加新的 `ConnectionType`
+2. 在 `mcp_connection_manager.py` 中实现连接类
+3. 在连接管理器中注册新的连接类型
+
+### 扩展API接口
+
+在 `connections.py` 中添加新的端点，保持RESTful设计原则。
+
+### 自定义服务器实现
+
+参考 `postgres_server.py` 实现自定义的MCP服务器。
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request来改进这个项目。
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+本项目采用MIT许可证。
 
-## 📞 联系方式
+## 🔗 相关资源
 
-如有问题或建议，请通过以下方式联系：
-
-- 项目Issues: [GitHub Issues](https://github.com/your-repo/issues)
-- 邮箱: your.email@example.com
-
----
-
-**Generic MCP Service** - 让工具管理变得简单高效！
+- [Model Context Protocol规范](https://modelcontextprotocol.io/)
+- [MCP SDK文档](https://github.com/modelcontextprotocol/servers)

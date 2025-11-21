@@ -28,8 +28,17 @@ RUN apt-get update && apt-get install -y \
     g++ \
     git \
     curl \
+    ca-certificates \
+    gnupg \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# 安装 Node.js (使用 NodeSource 仓库)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
+
+# 验证 Node.js 安装
+RUN node --version && npm --version
 
 # 复制依赖文件
 COPY requirements.txt .
@@ -45,13 +54,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY . .
 
-# 创建必要的目录并设置权限
-RUN mkdir -p /app/logs /app/configs && \
-    chown -R mcpuser:mcpuser /app && \
+# 创建必要的目录并设置权限，包括用户home目录
+RUN mkdir -p /app/logs /app/configs /home/mcpuser && \
+    chown -R mcpuser:mcpuser /app /home/mcpuser && \
     chmod -R 755 /app && \
     chmod 777 /app/configs /app/logs
 
-# 切换到非root用户
+# 切换回root用户安装全局npm包
+USER root
+
+# 全局安装mcp-remote工具
+RUN npm install -g mcp-remote
+
+# 切换回非root用户
 USER mcpuser
 
 # 暴露端口

@@ -87,6 +87,7 @@ services:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
+      - TAVILY_API_KEY=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
     restart: unless-stopped
     ports:
       - 8000:8000

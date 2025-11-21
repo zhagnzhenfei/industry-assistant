@@ -1,6 +1,6 @@
 """
-通用MCP服务主应用
-专注于工具管理功能
+重构后的MCP服务主应用
+基于标准MCP协议的轻量级实现
 """
 import asyncio
 import logging
@@ -10,10 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
 from app.core.config import settings
-from app.services.tool_manager import ToolManager
-from app.services.execution_service import ToolExecutionService
-from app.services.server_manager import ServerManager
-from app.api import execution, servers, tools
+from app.core.state import app_state
+from app.services.mcp_client import MCPClient
+from app.services.config_manager import ConfigManager
+from app.api.connections import router as connections_router
 
 # 配置日志
 logging.basicConfig(
@@ -24,9 +24,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 全局服务实例
-tool_manager: Optional[ToolManager] = None
-execution_service: Optional[ToolExecutionService] = None
-server_manager: Optional[ServerManager] = None
+mcp_client: Optional[MCPClient] = None
+config_manager: Optional[ConfigManager] = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,11 +37,12 @@ async def lifespan(app: FastAPI):
     # 关闭时清理
     await shutdown_event()
 
+
 # 创建FastAPI应用
 app = FastAPI(
-    title="Generic MCP Service",
-    version="1.0.0",
-    description="通用MCP工具管理服务",
+    title="Standard MCP Gateway",
+    version="2.0.0",
+    description="基于标准MCP协议的轻量级网关服务",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
@@ -56,149 +57,156 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 async def startup_event():
     """应用启动时初始化服务"""
-    global tool_manager, execution_service, server_manager
-    
     try:
-        logger.info("Starting Generic MCP Service...")
-        
-        # 初始化服务器管理器
-        logger.info("Initializing server manager...")
-        server_manager = ServerManager()
-        
-        # 初始化PostgreSQL服务器（如果配置了）
-        logger.info("Initializing PostgreSQL server...")
-        try:
-            await server_manager.initialize_postgres_server()
-        except Exception as e:
-            logger.warning(f"PostgreSQL server initialization failed: {e}")
-        
-        # 初始化工具管理器
-        logger.info("Initializing tool manager...")
-        tool_manager = ToolManager()
-        
-        # 设置工具管理器对服务器管理器的引用
-        tool_manager.server_manager = server_manager
-        
-        # 从PostgreSQL服务器发现工具（同步执行，确保工具可用）
-        logger.info("Discovering tools from PostgreSQL server...")
-        try:
-            await tool_manager.discover_tools_from_server("postgres-server")
-        except Exception as e:
-            logger.warning(f"PostgreSQL tool discovery failed: {e}")
-        
-        # 从MCP服务器动态发现工具（异步执行，不阻塞启动）
-        logger.info("Starting tool discovery from MCP servers...")
-        asyncio.create_task(tool_manager.discover_tools_from_servers())
-        
-        # 初始化执行服务
-        logger.info("Initializing execution service...")
-        execution_service = ToolExecutionService(tool_manager)
-        
-        # 设置API路由的依赖
-        execution.execution_service = execution_service
-        servers.server_manager = server_manager
-        servers.tool_manager = tool_manager
-        tools.tool_manager = tool_manager
-        
-        logger.info("Generic MCP Service started successfully")
-        
+        logger.info("Starting Standard MCP Gateway...")
+
+        # 初始化配置管理器
+        logger.info("Initializing config manager...")
+        global config_manager
+        config_manager = ConfigManager()
+
+        # 初始化MCP客户端
+        logger.info("Initializing MCP client...")
+        global mcp_client
+        mcp_client = MCPClient()
+        logger.info(f"✅ MCP客户端初始化完成: {type(mcp_client)}")
+
+        # 使用标准状态管理初始化应用状态
+        logger.info("🔧 初始化应用状态...")
+        app_state.initialize(mcp_client, config_manager)
+        logger.info("✅ 应用状态初始化完成")
+
+        # 加载并连接活跃服务器
+        logger.info("Loading and connecting to active servers...")
+        active_servers = config_manager.get_active_servers()
+        connected_count = 0
+
+        for server_config in active_servers:
+            try:
+                # 添加到MCP客户端
+                await mcp_client.add_server(server_config)
+                logger.info(f"Added server: {server_config.id}")
+
+                # 尝试连接 (非阻塞，连接失败不影响服务启动)
+                try:
+                    success = await mcp_client.connect_server(server_config.id)
+                    if success:
+                        connected_count += 1
+                        logger.info(f"Connected to server: {server_config.id}")
+                    else:
+                        logger.warning(f"Failed to connect to server: {server_config.id}")
+                except Exception as connect_error:
+                    logger.warning(f"Connection failed for server {server_config.id}: {connect_error}")
+                    # 连接失败不影响服务启动
+
+            except Exception as e:
+                logger.error(f"Error adding server {server_config.id}: {e}")
+                # 添加服务器失败不影响服务启动
+
+        logger.info(f"Standard MCP Gateway started successfully")
+        logger.info(f"Active servers: {len(active_servers)}, Connected: {connected_count}")
+
     except Exception as e:
         logger.error(f"Failed to start service: {e}")
         raise
 
+
 async def shutdown_event():
     """应用关闭时清理服务"""
-    logger.info("Shutting down Generic MCP Service...")
+    logger.info("Shutting down Standard MCP Gateway...")
+
+    if mcp_client:
+        await mcp_client.close()
+
+    logger.info("Standard MCP Gateway shutdown complete")
+
 
 # 根端点
 @app.get("/")
 async def root():
     """根端点"""
     return {
-        "message": "Generic MCP Service",
-        "version": "1.0.0",
-        "description": "专注于工具管理的通用MCP服务",
+        "message": "Standard MCP Gateway",
+        "version": "2.0.0",
+        "description": "基于标准MCP协议的轻量级网关服务",
         "docs": "/docs",
         "health": "/health",
         "features": [
-            "工具注册和管理",
-            "工具执行和监控",
-            "配置驱动的工具定义",
-            "支持多种工具类型",
+            "标准MCP协议支持",
+            "多连接类型 (SSE/STDIO/WebSocket)",
+            "动态工具发现",
+            "轻量级架构",
             "RESTful API接口"
         ]
     }
+
 
 # 健康检查端点
 @app.get("/health")
 async def health_check():
     """健康检查"""
-    try:
-        health_status = {
-            "status": "healthy",
-            "service": "Generic MCP Service",
-            "tools_count": len(tool_manager.get_all_tools()) if tool_manager else 0,
-            "active_tools": len(tool_manager.get_active_tools()) if tool_manager else 0,
-            "servers_count": len(server_manager.get_all_servers()) if server_manager else 0,
-            "active_servers": len(server_manager.get_active_servers()) if server_manager else 0
+    if not mcp_client:
+        return {
+            "status": "unhealthy",
+            "service": "Standard MCP Gateway",
+            "error": "MCP client not initialized"
         }
-        
+
+    try:
+        health_status = await mcp_client.health_check()
+        health_status.update({
+            "service": "Standard MCP Gateway",
+            "version": "2.0.0"
+        })
         return health_status
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return {
             "status": "unhealthy",
+            "service": "Standard MCP Gateway",
             "error": str(e)
         }
+
 
 # 服务信息端点
 @app.get("/info")
 async def service_info():
     """服务信息"""
-    if not tool_manager:
-        return {"error": "Tool manager not initialized"}
-    
-    stats = tool_manager.get_tool_stats()
-    categories = tool_manager.get_tool_categories()
-    tags = tool_manager.get_tool_tags()
-    
+    if not mcp_client or not config_manager:
+        return {"error": "Service not fully initialized"}
+
+    stats = mcp_client.get_stats()
+
     return {
-        "service": "Generic MCP Service",
-        "version": "1.0.0",
+        "service": "Standard MCP Gateway",
+        "version": "2.0.0",
+        "protocol_version": "2024-11-05",
         "statistics": stats,
-        "categories": categories,
-        "tags": tags,
         "api_endpoints": {
-            "tools": "/api/v1/tools",
-            "execution": "/api/v1/execution",
+            "connections": "/api/v1/connections",
+            "tools": "/api/v1/connections/tools/all",
+            "health": "/health",
             "docs": "/docs"
         }
     }
 
+
 # 注册路由
 app.include_router(
-    execution.router, 
-    prefix="/api/v1/execution", 
-    tags=["execution"]
+    connections_router,
+    prefix="/api/v1/connections",
+    tags=["connections"]
 )
-app.include_router(
-    servers.router, 
-    prefix="/api/v1/servers", 
-    tags=["servers"]
-)
-app.include_router(
-    tools.router, 
-    prefix="/api/v1/tools", 
-    tags=["tools"]
-)
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "app.main:app",
+        "app.main_new:app",
         host=settings.host,
         port=settings.port,
         reload=settings.debug
