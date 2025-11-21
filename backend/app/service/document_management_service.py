@@ -201,7 +201,6 @@ class DocumentManagementService:
                     doc_unique_id = chunk_data.get('doc_id', file_name) or file_name
                     unique_string = f"{doc_unique_id}_{user_id}_{i}_{chunk_data['content_with_weight']}"
                     chunk_id = xxhash.xxh64(unique_string.encode("utf-8")).hexdigest()
-                    print(f"🔧 生成chunk_id: {chunk_id} (文档: {doc_unique_id}, 分块: {i})")
 
                     # 生成向量嵌入
                     embedding = generate_embedding(chunk_data['content_with_weight'])
@@ -233,16 +232,6 @@ class DocumentManagementService:
             # 批量插入到Milvus
             if use_milvus and milvus_chunks:
                 print(f"插入数据到Milvus，共 {len(milvus_chunks)} 条...")
-                print(f"🔍 Milvus集合检查: {collection_name}")
-
-                # 打印第一个chunk的字段信息
-                if milvus_chunks:
-                    first_chunk = milvus_chunks[0]
-                    print(f"🔍 第一个chunk的字段: {first_chunk}")
-                    if hasattr(first_chunk, '__dict__'):
-                        chunk_fields = list(first_chunk.__dict__.keys())
-                        print(f"🔍 Chunk字段数量: {len(chunk_fields)}, 字段名: {chunk_fields}")
-
                 success = milvus_service.insert_data_sync(collection_name, milvus_chunks)
                 if success:
                     print("✅ Milvus插入成功")
@@ -606,11 +595,8 @@ class DocumentManagementService:
                         chunk_id = hit.entity.get('chunk_id', '')
                         unique_id = chunk_id if chunk_id else str(hit.id)
 
-                        print(f"🔍 搜索结果 - chunk_id: {chunk_id}, milvus_id: {hit.id}, 最终id: {unique_id}")
-
                         result_dict = {
                             'id': unique_id,
-                            'milvus_id': hit.id,  # 保留Milvus内部ID用于调试
                             'content': hit.entity.get('content', ''),
                             'content_ltks': hit.entity.get('content_ltks', ''),
                             'doc_id': hit.entity.get('doc_id', ''),

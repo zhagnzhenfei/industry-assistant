@@ -600,7 +600,7 @@ class MilvusService:
     def create_collection_sync(self, collection_name: str, config: Optional[CollectionConfig] = None) -> bool:
         """同步创建集合 - 完全同步实现，避免事件循环冲突"""
         try:
-            logger.info(f"🚀 开始同步创建/检查集合: {collection_name}")
+            logger.info(f"开始同步创建/检查集合: {collection_name}")
 
             # 使用默认配置或自定义配置
             if config is None:
@@ -608,40 +608,35 @@ class MilvusService:
                 if config is None:
                     # 如果没有找到默认配置，创建基础配置
                     config = CollectionConfig(collection_name=collection_name)
-                    logger.info(f"📝 创建了新的配置: {collection_name}")
-                else:
-                    logger.info(f"📝 使用默认配置: {collection_name}")
 
             # 如果集合已存在，需要检查schema并可能重建（因为我们要移除confidence字段）
             if utility.has_collection(collection_name):
                 logger.warning(f"集合 {collection_name} 已存在，检查schema...")
                 collection = Collection(collection_name)
                 field_names = [field.name for field in collection.schema.fields]
-                logger.info(f"🔍 现有集合字段: {field_names}")
-                logger.info(f"🔍 现有集合字段数量: {len(field_names)}")
 
                 # 强制删除任何包含confidence字段的集合
                 if "confidence" in field_names:
-                    logger.warning(f"🗑️ 集合 {collection_name} 包含已废弃的confidence字段，将强制删除重建")
+                    logger.warning(f"集合 {collection_name} 包含已废弃的confidence字段，将强制删除重建")
                     try:
                         utility.drop_collection(collection_name)
-                        logger.info(f"✅ 成功删除旧集合: {collection_name}")
+                        logger.info(f"成功删除旧集合: {collection_name}")
                     except Exception as e:
-                        logger.error(f"❌ 删除集合失败: {e}")
+                        logger.error(f"删除集合失败: {e}")
                         return False
                 else:
                     # 即使没有confidence字段，也检查字段数量是否正确
                     expected_fields = {"id", "vector", "content", "content_ltks", "doc_id", "doc_name", "kb_id", "chunk_id", "category", "timestamp", "source", "keywords", "metadata"}
                     if set(field_names) != expected_fields:
-                        logger.warning(f"🔧 集合 {collection_name} 字段不匹配，预期: {expected_fields}, 实际: {set(field_names)}，将重建")
+                        logger.warning(f"集合 {collection_name} 字段不匹配，将重建")
                         try:
                             utility.drop_collection(collection_name)
-                            logger.info(f"✅ 成功删除不匹配的集合: {collection_name}")
+                            logger.info(f"成功删除不匹配的集合: {collection_name}")
                         except Exception as e:
-                            logger.error(f"❌ 删除集合失败: {e}")
+                            logger.error(f"删除集合失败: {e}")
                             return False
                     else:
-                        logger.info(f"✅ 集合 {collection_name} schema正确，跳过创建")
+                        logger.info(f"集合 {collection_name} schema正确，跳过创建")
                         return True
 
             # 创建字段schema
@@ -661,10 +656,6 @@ class MilvusService:
                 FieldSchema(name="metadata", dtype=DataType.JSON)
             ]
 
-            field_names = [field.name for field in fields]
-            logger.info(f"🔍 新建集合schema字段: {field_names}")
-            logger.info(f"🔍 新建集合字段数量: {len(field_names)}")
-
             # 创建schema
             schema = CollectionSchema(
                 fields=fields,
@@ -675,10 +666,7 @@ class MilvusService:
             # 创建集合
             collection = Collection(name=collection_name, schema=schema)
 
-            logger.info(f"✅ 成功同步创建集合: {collection_name}")
-            logger.info(f"📋 集合描述: {config.description}")
-            logger.info(f"📏 向量维度: {config.vector_dim}")
-            logger.info(f"📊 是否支持动态字段: {config.enable_dynamic_field}")
+            logger.info(f"成功同步创建集合: {collection_name}")
 
             return True
 
@@ -789,11 +777,6 @@ class MilvusService:
                 batch_data = data[i:batch_end]
 
                 try:
-                    # 打印集合schema信息
-                    schema_fields = [field.name for field in collection.schema.fields]
-                    logger.info(f"🔍 集合schema字段: {schema_fields}")
-                    logger.info(f"🔍 集合schema字段数量: {len(schema_fields)}")
-
                     # 准备实体数据（注意：auto_id=True的字段不需要在entities中提供）
                     entities = [
                         [chunk.vector for chunk in batch_data],
@@ -809,9 +792,6 @@ class MilvusService:
                         [chunk.keywords for chunk in batch_data],
                         [chunk.metadata for chunk in batch_data]
                     ]
-
-                    logger.info(f"🔍 插入数据字段数量: {len(entities)}")
-                    logger.info(f"🔍 插入数据字段: ['vector', 'content', 'content_ltks', 'doc_id', 'doc_name', 'kb_id', 'chunk_id', 'category', 'timestamp', 'source', 'keywords', 'metadata']")
 
                     # 插入数据
                     collection.insert(entities)
