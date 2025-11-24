@@ -19,10 +19,14 @@ class AuthService:
         # 日志记录器
         self.logger = logging.getLogger(__name__)
         
-        # JWT配置
-        self.secret_key = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-this-in-production')
+        # JWT配置 - 安全要求：必须设置环境变量
+        self.secret_key = os.environ.get('JWT_SECRET_KEY')
         self.algorithm = os.environ.get('JWT_ALGORITHM', 'HS256')
-        self.access_token_expire_minutes = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '3600'))
+        self.access_token_expire_minutes = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '1440'))
+
+        # 安全验证：关键配置不能为空
+        if not self.secret_key:
+            raise ValueError("JWT_SECRET_KEY environment variable is required and cannot be empty")
         
         # 密码加密配置
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

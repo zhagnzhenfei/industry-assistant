@@ -10,11 +10,15 @@ class WebSearchService:
     def __init__(self, api_key: str = None):
         """
         Initialize the WebSearchService with API key.
-        
+
         Args:
             api_key: API key for Serper.dev. If not provided, will attempt to read from environment.
         """
-        self.api_key = api_key or os.environ.get('SERPER_API_KEY', '485a749de588ba9426d5de22f4ca1614a70e2e28')
+        # SECURITY: Remove hardcoded API key, only use environment variables
+        self.api_key = api_key or os.environ.get('SERPER_API_KEY')
+
+        if not self.api_key:
+            raise ValueError("SERPER_API_KEY environment variable is required for web search functionality")
         self.host = "google.serper.dev"
         self.headers = {
             'X-API-KEY': self.api_key,

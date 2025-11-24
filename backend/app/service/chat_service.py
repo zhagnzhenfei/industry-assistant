@@ -49,10 +49,14 @@ class UnifiedChatService:
         self.web_search_service = web_search_service
         self.session_service = session_service
 
-        # OpenAI/DashScope配置
-        self.openai_api_key = os.environ.get("DASHSCOPE_API_KEY", "")
-        self.openai_base_url = os.environ.get("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-        self.openai_model = os.environ.get("OPENAI_MODEL", "deepseek-r1")
+        # OpenAI/DashScope配置 - 安全要求：必须设置API密钥
+        self.openai_api_key = os.environ.get("DASHSCOPE_API_KEY")
+        self.openai_base_url = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+        self.openai_model = os.environ.get("OPENAI_MODEL", "qwen-turbo")
+
+        # 安全验证：API密钥不能为空
+        if not self.openai_api_key:
+            raise ValueError("DASHSCOPE_API_KEY environment variable is required and cannot be empty")
 
         # Token计算
         self.encoding = tiktoken.get_encoding("cl100k_base")

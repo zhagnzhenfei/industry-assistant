@@ -11,10 +11,20 @@ from collections import Counter # For basic data analysis
 import logging # Use logging for better error/info messages
 
 # --- Configuration ---
-# Note: Replace placeholders with your actual API keys or use environment variables
-SEARCH_API_KEY = os.getenv("BOCHAAI_API_KEY", "Bearer sk-392ef5953eaa4c43be43e6daab4e82a4") # Example: Use env var or default
-LLM_API_KEY = os.getenv("DASHSCOPE_API_KEY", "sk-f02db5a079ab41588b1cab09ad2777a2")      # Example: Use env var or default
+# SECURITY: Only use environment variables for API keys
+# Never commit actual API keys to version control
+SEARCH_API_KEY = os.getenv("BOCHAAI_API_KEY")
+LLM_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 LLM_BASE_URL = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+
+# Validate required environment variables
+if not SEARCH_API_KEY:
+    raise ValueError("BOCHAAI_API_KEY environment variable is required")
+if not LLM_API_KEY:
+    raise ValueError("DASHSCOPE_API_KEY environment variable is required")
+
+logger = logging.getLogger(__name__)
+logger.info("API configuration loaded from environment variables")
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
