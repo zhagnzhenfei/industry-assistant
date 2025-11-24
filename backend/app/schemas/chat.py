@@ -60,6 +60,16 @@ class ChatCompletionRequest(BaseModel):
     """聊天补全请求"""
     session_id: str = Field(..., description="会话ID")
     message: str = Field(..., description="用户消息内容", min_length=1)
+    memory_mode: Optional[str] = Field(default="smart", description="记忆模式: none/short_term/long_term/smart")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "session_id": "chat_session_123",
+                "message": "帮我分析一下这份文档的重点内容",
+                "memory_mode": "smart"
+            }
+        }
 
 
 class ChatCompletionResponse(BaseModel):

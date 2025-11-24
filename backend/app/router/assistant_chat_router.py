@@ -3,10 +3,11 @@
 """
 智能体聊天路由
 提供智能体与用户的对话功能
+支持记忆增强功能
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from schemas.chat import (
@@ -18,6 +19,18 @@ from schemas.chat import (
 from service.assistant_chat_service import AssistantChatService
 from service.auth_service import get_current_user
 from utils.database import default_manager
+
+# 记忆功能支持
+try:
+    from services.memory.decorators import chat_memory
+    MEMORY_ENABLED = True
+except ImportError:
+    # 如果记忆模块不可用，使用空装饰器
+    def chat_memory(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    MEMORY_ENABLED = False
 
 logger = logging.getLogger(__name__)
 
@@ -326,75 +339,156 @@ async def get_chat_history(
 
 
 @router.post("/completion", response_model=ChatCompletionResponse)
+@chat_memory(
+    memory_mode_param="memory_mode",
+    user_context_param="enhanced_context",
+    auto_save=True
+)
 async def chat_completion(
     request: ChatCompletionRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    enhanced_context: Optional[Dict[str, Any]] = None
 ):
-    """智能体聊天补全"""
+    """智能体聊天补全 - 支持记忆功能"""
     try:
         # 从ORM对象中提取user_id
         user_id = current_user.user_id if hasattr(current_user, 'user_id') else str(current_user.user_id)
-        
+
         # 直接创建数据库会话
         db_session = default_manager.session_factory()
-        
+
         try:
             chat_service = AssistantChatService()
+
+            # 增强用户消息内容
+            enhanced_message = request.message
+            if enhanced_context and enhanced_context.get("has_memories"):
+                # 构建记忆增强的消息
+                memory_context = enhanced_context.get("memory_context", "")
+                memory_count = enhanced_context.get("memory_count", 0)
+
+                if memory_context and memory_count > 0:
+                    enhanced_message = f"""
+=== 历史对话记忆 ({memory_count}条相关记忆) ===
+{memory_context}
+
+=== 当前对话 ===
+{request.message}
+
+请基于以上历史记忆，提供更加个性化和连贯的回复。
+"""
+
+                    logger.info(f"🧠 [CHAT_MEMORY] 用户 {user_id} 使用 {memory_count} 条历史记忆进行对话增强")
+
+            # 处理用户消息
             result = await chat_service.process_user_message(
                 db=db_session,
                 session_id=request.session_id,
                 user_id=user_id,
-                message_content=request.message
+                message_content=enhanced_message,
+                # 传递记忆上下文给服务层（可选）
+                enhanced_context=enhanced_context if enhanced_context and enhanced_context.get("has_memories") else None
             )
-            
+
+            # 在响应中添加记忆信息
+            if enhanced_context and enhanced_context.get("has_memories"):
+                if isinstance(result, dict):
+                    result["memory_enhanced"] = True
+                    result["memory_count"] = enhanced_context.get("memory_count", 0)
+
             logger.info(f"用户 {user_id} 聊天补全成功: {request.session_id}")
             return ChatCompletionResponse(**result)
-            
+
         finally:
             db_session.close()
-        
+
     except Exception as e:
         logger.error(f"聊天补全失败: {e}")
         raise HTTPException(status_code=400, detail=f"聊天补全失败: {str(e)}")
 
 
 @router.post("/completion/stream")
+@chat_memory(
+    memory_mode_param="memory_mode",
+    user_context_param="enhanced_context",
+    auto_save=True
+)
 async def chat_completion_stream(
     request: ChatCompletionRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    enhanced_context: Optional[Dict[str, Any]] = None
 ):
-    """智能体聊天补全 - 流式输出"""
+    """智能体聊天补全 - 流式输出（支持记忆功能）"""
     try:
         # 从ORM对象中提取user_id
         user_id = current_user.user_id if hasattr(current_user, 'user_id') else str(current_user.user_id)
-        
+
         # 直接创建数据库会话
         db_session = default_manager.session_factory()
-        
+
         try:
             chat_service = AssistantChatService()
-            
+
+            # 增强用户消息内容
+            enhanced_message = request.message
+            if enhanced_context and enhanced_context.get("has_memories"):
+                # 构建记忆增强的消息
+                memory_context = enhanced_context.get("memory_context", "")
+                memory_count = enhanced_context.get("memory_count", 0)
+
+                if memory_context and memory_count > 0:
+                    enhanced_message = f"""
+=== 历史对话记忆 ({memory_count}条相关记忆) ===
+{memory_context}
+
+=== 当前对话 ===
+{request.message}
+
+请基于以上历史记忆，提供更加个性化和连贯的回复。
+"""
+
+                    logger.info(f"🧠 [CHAT_MEMORY_STREAM] 用户 {user_id} 使用 {memory_count} 条历史记忆进行流式对话增强")
+
             # 设置SSE响应头
             from fastapi.responses import StreamingResponse
             import json
-            
+
             async def generate_stream():
                 try:
-                    # 发送开始事件
-                    yield f"data: {json.dumps({'type': 'start', 'message': '开始处理请求...'}, ensure_ascii=False)}\n\n"
-                    
+                    # 发送开始事件（包含记忆信息）
+                    start_data = {
+                        'type': 'start',
+                        'message': '开始处理请求...',
+                        'memory_enhanced': enhanced_context is not None and enhanced_context.get("has_memories", False),
+                        'memory_count': enhanced_context.get("memory_count", 0) if enhanced_context else 0
+                    }
+                    yield f"data: {json.dumps(start_data, ensure_ascii=False)}\n\n"
+
                     # 处理用户消息并生成流式响应
                     async for chunk in chat_service.process_user_message_stream(
                         db=db_session,
                         session_id=request.session_id,
                         user_id=user_id,
-                        message_content=request.message
+                        message_content=enhanced_message,
+                        # 传递记忆上下文给服务层（可选）
+                        enhanced_context=enhanced_context if enhanced_context and enhanced_context.get("has_memories") else None
                     ):
+                        # 在流式响应中添加记忆信息
+                        if enhanced_context and enhanced_context.get("has_memories"):
+                            if isinstance(chunk, dict):
+                                chunk["memory_enhanced"] = True
+                                chunk["memory_count"] = enhanced_context.get("memory_count", 0)
+
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-                    
+
                     # 发送结束事件
-                    yield f"data: {json.dumps({'type': 'end', 'message': '请求处理完成'}, ensure_ascii=False)}\n\n"
-                    
+                    end_data = {
+                        'type': 'end',
+                        'message': '请求处理完成',
+                        'memory_saved': enhanced_context is not None and enhanced_context.get("has_memories", False)
+                    }
+                    yield f"data: {json.dumps(end_data, ensure_ascii=False)}\n\n"
+
                 except Exception as e:
                     error_chunk = {
                         'type': 'error',
@@ -402,7 +496,7 @@ async def chat_completion_stream(
                         'error': str(e)
                     }
                     yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
-            
+
             return StreamingResponse(
                 generate_stream(),
                 media_type="text/event-stream",
@@ -410,13 +504,14 @@ async def chat_completion_stream(
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
                     "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Headers": "Cache-Control"
+                    "Access-Control-Allow-Headers": "Cache-Control",
+                    "X-Chat-Version": "v2-memory-enhanced"
                 }
             )
-            
+
         finally:
             db_session.close()
-        
+
     except Exception as e:
         logger.error(f"流式聊天补全失败: {e}")
         raise HTTPException(status_code=400, detail=f"流式聊天补全失败: {str(e)}")

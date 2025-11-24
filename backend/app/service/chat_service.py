@@ -1,358 +1,332 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+统一聊天服务 - 使用Milvus作为向量数据库
+整合V1和V2版本功能，基于Milvus进行文档检索
+"""
+
 import json
 import os
 from typing import List, Dict, Any, Optional, Generator
 import uuid
 from openai import OpenAI
 import numpy as np
-from llama_index.core.data_structs import Node
-from llama_index.core.schema import NodeWithScore
-from llama_index.postprocessor.dashscope_rerank import DashScopeRerank
 import tiktoken
 
-from .document_service import DocumentService
+from .document_management_service import DocumentManagementService
 from .web_search_service import WebSearchService
 from .session_service import SessionService
+from utils.database import default_manager
+from models import Document
+from service.core.rag.nlp.model import generate_embedding
+from pymilvus import connections, Collection, utility
+
+logger = __import__('logging').getLogger(__name__)
 
 
-class ChatService:
-    """Chat service that combines document retrieval and LLM generation"""
-    
-    def __init__(self, document_service: DocumentService, web_search_service: WebSearchService, session_service: SessionService):
+class UnifiedChatService:
+    """
+    统一聊天服务
+
+    功能特性：
+    1. 基于Milvus的向量检索
+    2. Web搜索集成
+    3. 会话管理
+    4. 文档重排序
+    5. 流式响应生成
+    """
+
+    def __init__(self, document_service: DocumentManagementService, web_search_service: WebSearchService, session_service: SessionService):
         """
-        Initialize the ChatService.
-        
+        初始化统一聊天服务
+
         Args:
-            document_service: Document service for knowledge base retrieval
-            web_search_service: Web search service for internet search
-            session_service: Session service for chat history management
+            document_service: 文档管理服务
+            web_search_service: Web搜索服务
+            session_service: 会话管理服务
         """
         self.document_service = document_service
         self.web_search_service = web_search_service
         self.session_service = session_service
+
+        # OpenAI/DashScope配置
         self.openai_api_key = os.environ.get("DASHSCOPE_API_KEY", "")
         self.openai_base_url = os.environ.get("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
         self.openai_model = os.environ.get("OPENAI_MODEL", "deepseek-r1")
-        self.encoding = tiktoken.get_encoding("cl100k_base")  # OpenAI通用编码
-        self.max_tokens = 12000  # 最大token数量限制
-    
-    def retrieve_from_knowledge_base(self, question: str, dataset_id: str) -> List[Dict[str, Any]]:
-        """
-        Retrieve documents from knowledge base.
-        
-        Args:
-            question: User question
-            dataset_id: Dataset ID
-            
-        Returns:
-            List of retrieved documents
-        """
+
+        # Token计算
+        self.encoding = tiktoken.get_encoding("cl100k_base")
+        self.max_tokens = 12000
+
+        # Milvus配置
+        self.milvus_host = os.environ.get("MILVUS_HOST", "localhost")
+        self.milvus_port = int(os.environ.get("MILVUS_PORT", "19530"))
+        self.collection_name = "document_chunks"
+
+        # 初始化Milvus连接
+        self._init_milvus()
+
+    def _init_milvus(self):
+        """初始化Milvus连接"""
         try:
-            response = self.document_service.retrieve_documents(
-                question=question,
-                dataset_ids=[dataset_id]
+            connections.connect(
+                alias="default",
+                host=self.milvus_host,
+                port=self.milvus_port
             )
-            
-            if response.get("code") != 0:
-                return []
-                
-            # 从响应中提取文档
-            documents = []
-            if "data" in response and "chunks" in response["data"]:
-                for i, chunk in enumerate(response["data"]["chunks"]):
-                    # 使用document_keyword作为title
-                    title = chunk.get("document_keyword", None)
-                    
-                    doc = {
-                        "id": i+1,
-                        "content": chunk.get("content", ""),
-                        "content_with_weight": f"{chunk.get('content', '')} (相关度: {chunk.get('score', 0):.2f})",
-                        "source": "knowledge",
-                        "title": title,
-                        "weight": chunk.get("score", 1.0)
-                    }
-                    documents.append(doc)
-            
-            return documents
+
+            # 检查collection是否存在
+            if utility.has_collection(self.collection_name):
+                self.collection = Collection(self.collection_name)
+                self.collection.load()
+                logger.info(f"✅ 已连接到Milvus集合: {self.collection_name}")
+            else:
+                logger.warning(f"⚠️ Milvus集合不存在: {self.collection_name}")
+                self.collection = None
+
         except Exception as e:
-            print(f"Error retrieving from knowledge base: {str(e)}")
-            return []
-    
-    def retrieve_from_web(self, question: str) -> List[Dict[str, Any]]:
+            logger.error(f"❌ 连接Milvus失败: {e}")
+            self.collection = None
+
+    def retrieve_from_milvus(self, question: str, user_id: str = None, top_k: int = 10) -> List[Dict[str, Any]]:
         """
-        Retrieve information from web search.
-        
-        Args:
-            question: User question
-            
-        Returns:
-            List of search results formatted as documents
-        """
-        try:
-            # 执行Web搜索
-            search_results = self.web_search_service.search(query=question)
-            
-            if "error" in search_results and search_results["error"]:
-                return []
-            
-            # 提取并格式化搜索结果
-            formatted_results = self.web_search_service.extract_search_results(search_results)
-            
-            # 转换为文档格式
-            documents = []
-            for i, result in enumerate(formatted_results):
-                if result.get("type") == "organic":
-                    # 只使用有机搜索结果
-                    doc = {
-                        "id": i+1,
-                        "content": result.get("snippet", ""),
-                        "content_with_weight": result.get("snippet", ""),
-                        "source": "web",
-                        "title": result.get("title", None),
-                        "link": result.get("link", None),
-                        "weight": 1.0 - (i * 0.1)  # 根据位置降低权重
-                    }
-                    documents.append(doc)
-                elif result.get("type") == "knowledgeGraph":
-                    # 知识图谱结果
-                    description = result.get("description", "")
-                    if description:
-                        doc = {
-                            "id": len(documents) + 1,
-                            "content": description,
-                            "content_with_weight": description,
-                            "source": "web",
-                            "title": result.get("title", None),
-                            "link": result.get("link", None),
-                            "weight": 1.2  # 知识图谱通常更相关
-                        }
-                        documents.append(doc)
-            
-            return documents
-        except Exception as e:
-            print(f"Error retrieving from web: {str(e)}")
-            return []
-    
-    def rerank_similarity(self, query: str, documents: List[Dict[str, Any]]) -> List[float]:
-        """
-        使用DashScope重排对文档进行相似度评分
-        
-        Args:
-            query: 用户查询
-            documents: 要评分的文档列表
-            
-        Returns:
-            文档相似度分数列表
-        """
-        try:
-            api_key = os.getenv("DASHSCOPE_API_KEY", self.openai_api_key)
-            
-            # 从文档中提取文本
-            texts = [doc["content"] for doc in documents]
-            
-            # 创建节点列表
-            nodes = [NodeWithScore(node=Node(text=text), score=1.0) for text in texts]
-            
-            # 初始化 DashScopeRerank
-            dashscope_rerank = DashScopeRerank(top_n=len(texts), api_key=api_key)
-            
-            # 执行重排序
-            results = dashscope_rerank.postprocess_nodes(nodes, query_str=query)
-            
-            # 提取分数
-            scores = [res.score for res in results]
-            scores = np.array(scores)
-            
-            return scores
-        except Exception as e:
-            print(f"Error in rerank_similarity: {str(e)}")
-            # 出错时返回原始权重
-            return [doc.get("weight", 1.0) for doc in documents]
-    
-    def rerank_documents(self, question: str, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        使用DashScope重排对文档进行重排序，并确保不超过token数量限制。
-        
+        从Milvus检索相关文档
+
         Args:
             question: 用户问题
-            documents: 要重排的文档列表
-            
+            user_id: 用户ID（可选，用于过滤用户文档）
+            top_k: 返回结果数量
+
         Returns:
-            重排后的文档列表，确保总token数不超过限制
+            检索到的文档列表
+        """
+        if not self.collection:
+            logger.error("Milvus连接不可用")
+            return []
+
+        try:
+            # 生成问题向量
+            question_embedding = generate_embedding(question)
+
+            # 构建搜索参数
+            search_params = {
+                "metric_type": "COSINE",
+                "params": {"nprobe": 16}
+            }
+
+            # 构建表达式（可选的用户过滤）
+            expr = f"user_id == '{user_id}'" if user_id else None
+
+            # 执行向量搜索
+            results = self.collection.search(
+                data=[question_embedding],
+                anns_field="embedding",
+                param=search_params,
+                limit=top_k,
+                expr=expr,
+                output_fields=["content", "document_id", "chunk_id", "file_name", "user_id"]
+            )
+
+            # 格式化结果
+            documents = []
+            for hits in results:
+                for hit in hits:
+                    documents.append({
+                        "content": hit.entity.get("content", ""),
+                        "document_id": hit.entity.get("document_id", ""),
+                        "chunk_id": hit.entity.get("chunk_id", ""),
+                        "file_name": hit.entity.get("file_name", ""),
+                        "user_id": hit.entity.get("user_id", ""),
+                        "score": float(hit.score),
+                        "source": "milvus"
+                    })
+
+            logger.info(f"🔍 从Milvus检索到 {len(documents)} 个相关文档")
+            return documents
+
+        except Exception as e:
+            logger.error(f"❌ Milvus检索失败: {e}")
+            return []
+
+    def retrieve_from_web(self, question: str, num_results: int = 5) -> List[Dict[str, Any]]:
+        """
+        从Web搜索获取信息
+
+        Args:
+            question: 搜索问题
+            num_results: 搜索结果数量
+
+        Returns:
+            Web搜索结果列表
+        """
+        try:
+            results = self.web_search_service.search(question, num_results=num_results)
+
+            web_docs = []
+            for result in results:
+                web_docs.append({
+                    "title": result.get("title", ""),
+                    "snippet": result.get("snippet", ""),
+                    "url": result.get("url", ""),
+                    "score": result.get("score", 0.0),
+                    "source": "web"
+                })
+
+            logger.info(f"🌐 从Web搜索到 {len(web_docs)} 个结果")
+            return web_docs
+
+        except Exception as e:
+            logger.error(f"❌ Web搜索失败: {e}")
+            return []
+
+    def rerank_documents(self, question: str, documents: List[Dict[str, Any]], top_n: int = 10) -> List[Dict[str, Any]]:
+        """
+        重排序文档
+
+        Args:
+            question: 用户问题
+            documents: 文档列表
+            top_n: 返回文档数量
+
+        Returns:
+            重排序后的文档列表
         """
         if not documents:
             return []
-        
+
         try:
-            # 使用DashScope重排进行重排序
-            similarity_scores = self.rerank_similarity(question, documents)
-            
-            # 更新文档的权重和content_with_weight字段
-            for i, score in enumerate(similarity_scores):
-                if i < len(documents):  # 防止索引越界
-                    documents[i]["weight"] = float(score)
-                    documents[i]["content_with_weight"] = f"{documents[i]['content']} (相关度: {float(score):.2f})"
-            
-            # 根据新权重排序（权重越高越相关）
-            sorted_docs = sorted(documents, key=lambda x: x.get("weight", 0), reverse=True)
-            
-            # 计算token并截断，保证总token数不超过限制
-            filtered_docs = []
-            total_tokens = 0
-            
-            print(f"\n{'='*50}")
-            print(f"文档Token数量控制:")
-            print(f"{'='*50}")
-            
-            for doc in sorted_docs:
-                # 计算此文档的token数量（内容部分）
-                doc_tokens = len(self.encoding.encode(doc["content"]))
-                
-                # 检查是否会超出限制
-                if total_tokens + doc_tokens > self.max_tokens:
-                    print(f"跳过文档: {doc.get('title', '无标题')} ({doc_tokens} tokens)，会超出限制")
-                    continue
-                
-                # 加入文档并累计token数
-                filtered_docs.append(doc)
-                total_tokens += doc_tokens
-                print(f"添加文档: {doc.get('title', '无标题')} ({doc_tokens} tokens), 累计: {total_tokens}/{self.max_tokens}")
-                
-                # 如果已经有10个文档，跳出循环（保持现有的文档数量限制）
-                if len(filtered_docs) >= 10:
-                    break
-            
-            print(f"\n文档筛选结果: 选择了 {len(filtered_docs)}/{len(sorted_docs)} 个文档，总token数: {total_tokens}")
-            print(f"{'='*50}\n")
-            
-            # 确保文档ID是连续的
-            for i, doc in enumerate(filtered_docs):
-                doc["id"] = i + 1
-                
-            return filtered_docs
+            # 按分数排序
+            documents.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+            # 返回前N个文档
+            return documents[:top_n]
+
         except Exception as e:
-            print(f"Error in rerank_documents: {str(e)}")
-            # 出错时回退到简单排序
-            sorted_docs = sorted(documents, key=lambda x: x.get("weight", 0), reverse=True)
-            return sorted_docs[:10]
-    
-    def get_chat_completion(self, session_id: Optional[str], question: str, 
-                           retrieved_content: List[Dict[str, Any]]) -> Generator[str, None, None]:
+            logger.error(f"❌ 文档重排序失败: {e}")
+            return documents[:top_n]
+
+    def _build_context(self, documents: List[Dict[str, Any]], max_tokens: int = 8000) -> str:
         """
-        获取流式聊天完成结果，并按照指定格式输出。
+        构建上下文文本
 
         Args:
-            session_id: 会话ID（可选）
-            question: 用户问题
-            retrieved_content: 检索到的内容
-            
+            documents: 文档列表
+            max_tokens: 最大token数
+
         Returns:
-            流式输出的生成器，每个元素为符合SSE格式的字符串
+            上下文文本
         """
-        # 判断 contents 是否为空
-        if not retrieved_content:
-            formatted_references = "知识库没有找到相关内容, 请结合你自己的知识回答"
-        else:
-            # 格式化参考内容，添加序号
-            formatted_refs = []
-            for i, ref in enumerate(retrieved_content):
-                formatted_refs.append(f"[{i+1}] [{ref['source']}] {ref['content_with_weight']}")
-            formatted_references = "\n".join(formatted_refs)
-        
-        # 获取会话历史消息
-        history_messages = []
-        if session_id:
-            # 将用户当前问题添加到会话历史
-            self.session_service.add_message(session_id, "user", question)
-            # 获取历史对话（不包含当前问题）
-            history_messages = self.session_service.get_messages_for_prompt(session_id)
-        
-        # 格式化历史对话
-        if history_messages:
-            # 注意：history_messages已经按时间顺序排列，最近的对话在后面
-            history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history_messages])
-            history_context = f"\n\n历史对话（最近的对话内容更重要）：\n{history_text}"
-        else:
-            history_context = ""
-        
-        prompt = f"""
-        你是一个智能助手，负责根据用户的问题和提供的参考内容生成回答。请严格按照以下要求生成回答：
-        1. 回答必须基于提供的参考内容。
-        2. 在回答中，每一块内容都必须标注引用的来源，格式为：##编号$$。例如：##1$$ 表示引用自第1条参考内容。
-        3. 如果没有参考内容，请明确说明。
-        4. 注意保持与历史对话的连贯性。
-        
-        参考内容：
-        {formatted_references}
-        {history_context}
-        
-        用户问题：{question}
+        context_parts = []
+        current_tokens = 0
+
+        for doc in documents:
+            content = doc.get("content", "") or doc.get("snippet", "")
+            if not content:
+                continue
+
+            # 计算token数量
+            tokens = len(self.encoding.encode(content))
+
+            if current_tokens + tokens > max_tokens:
+                # 截断文档内容
+                remaining_tokens = max_tokens - current_tokens
+                if remaining_tokens > 100:  # 至少保留100个token
+                    truncated = self.encoding.decode(self.encoding.encode(content)[:remaining_tokens])
+                    context_parts.append(f"[{doc.get('source', 'unknown')}] {truncated}")
+                break
+
+            context_parts.append(f"[{doc.get('source', 'unknown')}] {content}")
+            current_tokens += tokens
+
+        return "\n\n".join(context_parts)
+
+    def get_chat_completion(
+        self,
+        session_id: str,
+        question: str,
+        retrieved_content: List[Dict[str, Any]] = None
+    ) -> Generator[str, None, None]:
         """
+        生成聊天回复（流式）
 
-        print(prompt)
+        Args:
+            session_id: 会话ID
+            question: 用户问题
+            retrieved_content: 检索到的文档内容
 
+        Yields:
+            流式回复内容
+        """
         try:
-            # 初始化 OpenAI 客户端
+            # 获取会话历史
+            session_history = self.session_service.get_session_history(session_id)
+
+            # 构建上下文
+            context = ""
+            if retrieved_content:
+                context = self._build_context(retrieved_content)
+
+            # 构建系统提示
+            system_prompt = f"""你是一个智能问答助手。请基于以下检索到的文档内容回答用户问题。
+
+检索到的相关文档：
+{context}
+
+请根据上述文档内容回答用户的问题。如果文档中没有相关信息，请诚实地说明，并尽可能提供有用的建议。
+
+用户问题：{question}
+
+回答："""
+
+            # 调用OpenAI API生成回复
             client = OpenAI(
                 api_key=self.openai_api_key,
                 base_url=self.openai_base_url
             )
 
-            # 创建聊天完成请求
-            completion = client.chat.completions.create(
+            # 构建消息历史
+            messages = [
+                {"role": "system", "content": system_prompt}
+            ]
+
+            # 添加会话历史
+            for msg in session_history[-10:]:  # 最近10条消息
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+            # 添加当前问题
+            messages.append({"role": "user", "content": question})
+
+            # 发送流式请求
+            response = client.chat.completions.create(
                 model=self.openai_model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
+                messages=messages,
                 stream=True,
+                temperature=0.7,
+                max_tokens=2000
             )
 
-            # 处理流式响应
-            model_answer = ""  # 用于存储大模型的回答
-            think = ""  # 用于存储思考过程
-            for chunk in completion:
-                # print("原始 chunk 数据:", chunk)
-                if chunk.choices[0].finish_reason == "stop":
-                    # 模型回答结束后，返回检索内容
-                    message = {
-                        "documents": retrieved_content,
-                    }
-                    json_message = json.dumps(message)
-                    yield f"event: message\ndata: {json_message}\n\n"
-                    
-                    # 如果有会话ID，将回答添加到会话历史
-                    if session_id and model_answer:
-                        self.session_service.add_message(session_id, "assistant", model_answer)
-                    
-                    # 最后发送 [DONE] 事件
-                    yield "event: end\ndata: [DONE]\n\n"
-                    break
-                else:
-                    # 实时输出消息
-                    delta = chunk.choices[0].delta
-                    if hasattr(delta, "content") and delta.content:
-                        model_answer += delta.content  # 累加大模型的回答
-                        message = {
-                            "role": "assistant",
-                            "content": delta.content,
-                            "thinking": False,
-                        }
-                        json_message = json.dumps(message)
-                        yield f"event: message\ndata: {json_message}\n\n"
-                    elif hasattr(delta, "reasoning_content") and delta.reasoning_content:
-                        think += delta.reasoning_content
-                        message = {
-                            "role": "assistant",
-                            "content": delta.reasoning_content,
-                            "thinking": True,
-                        }
-                        json_message = json.dumps(message)
-                        yield f"event: message\ndata: {json_message}\n\n"
+            # 收集完整回复用于保存会话
+            full_reply = ""
+
+            # 流式输出
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    full_reply += content
+
+                    # SSE格式输出
+                    yield f"data: {json.dumps({'content': content, 'type': 'message'}, ensure_ascii=False)}\n\n"
+
+            # 保存会话
+            self.session_service.add_message(session_id, "user", question)
+            self.session_service.add_message(session_id, "assistant", full_reply)
+
+            # 结束标记
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
-            # 发生错误时返回错误信息
-            error_message = {
-                "role": "error",
-                "content": str(e)
-            }
-            json_error_message = json.dumps(error_message)
-            yield f"event: error\ndata: {json_error_message}\n\n" 
+            logger.error(f"❌ 生成聊天回复失败: {e}")
+            yield f"data: {json.dumps({'error': str(e), 'type': 'error'}, ensure_ascii=False)}\n\n"

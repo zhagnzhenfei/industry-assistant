@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from router import document_router, search_router, research_router, user_router, assistant_router, assistant_chat_router, mcp_router, agent_router, memory_router
+from router import document_router, search_router, user_router, assistant_router, assistant_chat_router, mcp_router, memory_router
 from router.enhanced_research_router_simple import router as enhanced_research_router
 from router.chart_router import router as chart_router
-from router.agent_router import startup_agent_system, shutdown_agent_system
 import logging
 import os
 
@@ -30,16 +29,13 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时初始化所有系统
-    await startup_agent_system()
     logger = logging.getLogger(__name__)
-    logger.info("Agent系统启动完成")
+    logger.info("应用启动完成")
 
     yield
 
     # 关闭时清理所有系统
-    await shutdown_agent_system()
-    logger.info("Agent系统已关闭")
+    logger.info("应用已关闭")
 
 app = FastAPI(
     title="AI Application",
@@ -60,12 +56,10 @@ app.add_middleware(
 # 包含路由
 app.include_router(document_router)
 app.include_router(search_router)
-app.include_router(research_router)
 app.include_router(user_router)
 app.include_router(assistant_router)
 app.include_router(assistant_chat_router)
 app.include_router(mcp_router)
-app.include_router(agent_router)
 app.include_router(enhanced_research_router)
 app.include_router(chart_router)
 app.include_router(memory_router)

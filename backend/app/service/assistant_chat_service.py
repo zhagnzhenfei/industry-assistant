@@ -318,11 +318,12 @@ class AssistantChatService:
             return False
     
     async def process_user_message(
-        self, 
-        db: Session, 
-        session_id: str, 
-        user_id: str, 
-        message_content: str
+        self,
+        db: Session,
+        session_id: str,
+        user_id: str,
+        message_content: str,
+        enhanced_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """处理用户消息并生成智能体回复 - 使用标准Function Call流程"""
         try:
@@ -375,11 +376,12 @@ class AssistantChatService:
             raise
 
     async def process_user_message_stream(
-        self, 
-        db: Session, 
-        session_id: str, 
-        user_id: str, 
-        message_content: str
+        self,
+        db: Session,
+        session_id: str,
+        user_id: str,
+        message_content: str,
+        enhanced_context: Optional[Dict[str, Any]] = None
     ):
         """处理用户消息并生成流式响应"""
         try:
