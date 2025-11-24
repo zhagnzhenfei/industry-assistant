@@ -17,6 +17,9 @@ from .search import (
 )
 
 from .chat import (
+    ChatRequest,
+    SessionRequest,
+    SessionResponse,
     ChatSessionCreateRequest,
     ChatSessionResponse,
     ChatSessionListResponse,
@@ -59,13 +62,16 @@ __all__ = [
     'DocumentDeleteResponse',
     'DocumentSearchRequest',
     'DocumentSearchResponse',
-    
+
     # Search schemas
     'WebSearchRequest',
     'SearchResultItem',
     'WebSearchResponse',
-    
+
     # Chat schemas
+    'ChatRequest',
+    'SessionRequest',
+    'SessionResponse',
     'ChatSessionCreateRequest',
     'ChatSessionResponse',
     'ChatSessionListResponse',

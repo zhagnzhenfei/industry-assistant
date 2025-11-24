@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from router import document_router, search_router, user_router, assistant_router, assistant_chat_router, mcp_router, memory_router
+from router.chat_router import router as chat_router
 from router.enhanced_research_router_simple import router as enhanced_research_router
 from router.chart_router import router as chart_router
 import logging
@@ -59,6 +60,7 @@ app.include_router(search_router)
 app.include_router(user_router)
 app.include_router(assistant_router)
 app.include_router(assistant_chat_router)
+app.include_router(chat_router)
 app.include_router(mcp_router)
 app.include_router(enhanced_research_router)
 app.include_router(chart_router)

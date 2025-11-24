@@ -9,6 +9,39 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 
+class ChatRequest(BaseModel):
+    """聊天请求模型"""
+    question: str = Field(..., description="用户问题", min_length=1)
+    session_id: Optional[str] = Field(None, description="会话ID，可选")
+    search_knowledge: bool = Field(default=True, description="是否搜索知识库")
+    search_web: bool = Field(default=True, description="是否进行网络搜索")
+    memory_mode: Optional[str] = Field(default="smart", description="记忆模式: none/short_term/long_term/smart")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "question": "帮我分析人工智能的发展趋势",
+                "session_id": "chat_session_123",
+                "search_knowledge": True,
+                "search_web": True,
+                "memory_mode": "smart"
+            }
+        }
+
+
+class SessionRequest(BaseModel):
+    """会话请求模型"""
+    user_id: Optional[str] = Field(None, description="用户ID，可选")
+
+
+class SessionResponse(BaseModel):
+    """会话响应模型"""
+    session_id: str = Field(..., description="会话ID")
+    created_at: int = Field(..., description="创建时间戳")
+    updated_at: int = Field(..., description="更新时间戳")
+    message_count: int = Field(default=0, description="消息数量")
+
+
 class ChatSessionCreateRequest(BaseModel):
     """创建聊天会话请求"""
     assistant_id: str = Field(..., description="智能体ID")

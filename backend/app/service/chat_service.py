@@ -259,7 +259,7 @@ class UnifiedChatService:
         """
         try:
             # 获取会话历史
-            session_history = self.session_service.get_session_history(session_id)
+            session_history = self.session_service.get_history(session_id)
 
             # 构建上下文
             context = ""

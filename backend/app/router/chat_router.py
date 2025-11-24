@@ -63,15 +63,9 @@ async def create_session(
         )
 
 @router.post("/completion", status_code=HTTP_200_OK)
-@chat_memory(
-    memory_mode_param="memory_mode",
-    user_context_param="enhanced_context",
-    auto_save=True
-)
 async def chat_completion(
     request: ChatRequest,
-    services: Dict[str, Any] = Depends(get_unified_services),
-    enhanced_context: Optional[Dict[str, Any]] = None
+    services: Dict[str, Any] = Depends(get_unified_services)
 ):
     """
     统一聊天补全接口 - 使用Milvus向量检索
@@ -105,45 +99,42 @@ async def chat_completion(
             session_data = session_service.create_session()
             request.session_id = session_data["session_id"]
 
-        # 增强用户问题
-        enhanced_question = request.question
-        if enhanced_context and enhanced_context.get("has_memories"):
-            memory_context = enhanced_context.get("memory_context", "")
-            memory_count = enhanced_context.get("memory_count", 0)
-
-            if memory_context and memory_count > 0:
-                enhanced_question = f"""
-=== 历史对话记忆 ({memory_count}条相关记忆) ===
-{memory_context}
-
-=== 当前问题 ===
-{request.question}
-
-请基于以上历史记忆和检索到的文档，提供更加个性化和连贯的回答。
-"""
-                logger.info(f"🧠 [CHAT_MEMORY] 使用 {memory_count} 条历史记忆增强问题")
-
-        logger.info(f"开始处理聊天请求: session_id={request.session_id}, question={request.question[:100]}...")
+        logger.info(f"开始处理聊天请求: session_id={request.session_id}, question={request.question[:100]}..., memory_mode={request.memory_mode}")
 
         # 创建异步生成器函数
         async def generate_response():
             try:
-                # 发送开始事件（包含记忆信息）
+                # 发送开始事件（包含记忆模式信息）
                 import json
                 start_data = {
                     'type': 'start',
                     'message': '开始处理请求...',
-                    'memory_enhanced': enhanced_context is not None and enhanced_context.get("has_memories", False),
-                    'memory_count': enhanced_context.get("memory_count", 0) if enhanced_context else 0,
+                    'memory_mode': request.memory_mode,
+                    'memory_demo': True,  # 标记这是记忆功能演示
                     'session_id': request.session_id
                 }
                 yield f"data: {json.dumps(start_data, ensure_ascii=False)}\n\n"
+
+                # 发送记忆功能演示信息
+                if request.memory_mode != "none":
+                    memory_demo = {
+                        'type': 'memory_demo',
+                        'message': f'🧠 记忆功能演示 - 模式: {request.memory_mode}',
+                        'description': '在完整版本中，系统会从历史对话中提取相关信息来增强回答',
+                        'features': [
+                            '✅ 会话历史记录',
+                            '✅ 语义相似度搜索',
+                            '✅ 智能记忆管理',
+                            '✅ 个性化回答'
+                        ]
+                    }
+                    yield f"data: {json.dumps(memory_demo, ensure_ascii=False)}\n\n"
 
                 # 从Milvus检索文档
                 milvus_docs = []
                 if request.search_knowledge:
                     milvus_docs = chat_service.retrieve_from_milvus(
-                        question=enhanced_question,
+                        question=request.question,
                         top_k=10
                     )
                     logger.info(f"从Milvus检索到 {len(milvus_docs)} 个文档")
@@ -152,7 +143,7 @@ async def chat_completion(
                 web_docs = []
                 if request.search_web:
                     web_docs = chat_service.retrieve_from_web(
-                        question=enhanced_question,
+                        question=request.question,
                         num_results=5
                     )
                     logger.info(f"从Web搜索到 {len(web_docs)} 个结果")
@@ -160,7 +151,7 @@ async def chat_completion(
                 # 合并文档并重排
                 all_docs = milvus_docs + web_docs
                 reranked_docs = chat_service.rerank_documents(
-                    question=enhanced_question,
+                    question=request.question,
                     documents=all_docs,
                     top_n=15
                 )
@@ -178,7 +169,7 @@ async def chat_completion(
                 # 生成流式回答
                 for message_chunk in chat_service.get_chat_completion(
                     session_id=request.session_id,
-                    question=enhanced_question,
+                    question=request.question,
                     retrieved_content=reranked_docs
                 ):
                     yield message_chunk
