@@ -153,10 +153,14 @@ class MilvusService:
             # 创建集合
             collection = Collection(name=collection_name, schema=schema)
 
+            # 加载集合到内存（新创建的集合需要显式加载才能搜索）
+            logger.info(f"正在加载集合到内存: {collection_name}")
+            collection.load()
+
             # 缓存集合实例
             self.collections[collection_name] = collection
 
-            logger.info(f"✅ 成功创建集合: {collection_name}")
+            logger.info(f"✅ 成功创建并加载集合: {collection_name}")
             logger.info(f"📋 集合描述: {config.description}")
             logger.info(f"📏 向量维度: {config.vector_dim}")
             logger.info(f"📊 是否支持动态字段: {config.enable_dynamic_field}")
@@ -352,7 +356,7 @@ class MilvusService:
 
             # 默认输出字段
             if output_fields is None:
-                output_fields = ["content", "doc_id", "doc_name", "category", "confidence", "source", "metadata", "chunk_id"]
+                output_fields = ["content", "doc_id", "doc_name", "category", "source", "metadata", "chunk_id"]
 
             # 执行搜索
             start_time = time.time()
@@ -374,19 +378,20 @@ class MilvusService:
 
             if results and len(results) > 0:
                 for hit in results[0]:
-                    # 优先使用chunk_id作为唯一标识，如果没有则使用Milvus内部ID
+                    # 正确分离两种ID：
+                    # - id: Milvus内部ID（字符串表示）
+                    # - chunk_id: 业务ID（字符串）
                     chunk_id = hit.entity.get("chunk_id", "")
-                    unique_id = chunk_id if chunk_id else str(hit.id)
 
                     result = SearchResult(
-                        id=unique_id,
+                        id=str(hit.id),  # Milvus内部ID（转换为字符串）
                         score=hit.score,
                         content=hit.entity.get("content", ""),
                         doc_id=hit.entity.get("doc_id", ""),
                         doc_name=hit.entity.get("doc_name", ""),
                         category=hit.entity.get("category", ""),
                         source=hit.entity.get("source", ""),
-                        chunk_id=hit.entity.get("chunk_id", ""),
+                        chunk_id=chunk_id,  # 业务ID
                         metadata=hit.entity.get("metadata", {})
                     )
                     search_results.append(result)
@@ -666,7 +671,30 @@ class MilvusService:
             # 创建集合
             collection = Collection(name=collection_name, schema=schema)
 
-            logger.info(f"成功同步创建集合: {collection_name}")
+            # 加载集合到内存（新创建的集合需要显式加载才能搜索）
+            logger.info(f"正在加载集合到内存: {collection_name}")
+            collection.load()
+
+            # 等待加载完成
+            import time
+            max_wait = 10  # 最多等待10秒
+            wait_time = 0
+            while wait_time < max_wait:
+                try:
+                    load_state = utility.load_state(collection_name)
+                    if load_state.name == 'Loaded':
+                        logger.info(f"✅ 集合 {collection_name} 加载完成")
+                        break
+                    time.sleep(0.5)
+                    wait_time += 0.5
+                except Exception as e:
+                    logger.warning(f"检查加载状态失败: {e}")
+                    break
+
+            if wait_time >= max_wait:
+                logger.warning(f"⚠️ 集合 {collection_name} 加载超时，但将继续")
+
+            logger.info(f"成功同步创建并加载集合: {collection_name}")
 
             return True
 

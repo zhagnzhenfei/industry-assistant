@@ -16,6 +16,12 @@ volumes:
     name: mcp-configs
   mcp-logs:
     name: mcp-logs
+  milvus-etcd-data:
+    name: milvus-etcd-data
+  milvus-minio-data:
+    name: milvus-minio-data
+  milvus-data:
+    name: milvus-data
 
 services:
   # 主应用服务
@@ -157,7 +163,7 @@ services:
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - ./volumes/etcd:/etcd
+      - milvus-etcd-data:/etcd
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
@@ -178,7 +184,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     volumes:
-      - ./volumes/minio:/minio_data
+      - milvus-minio-data:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -202,7 +208,7 @@ services:
       ETCD_ENDPOINTS: milvus-etcd:2379
       MINIO_ADDRESS: milvus-minio:9000
     volumes:
-      - ./volumes/milvus:/var/lib/milvus
+      - milvus-data:/var/lib/milvus
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s

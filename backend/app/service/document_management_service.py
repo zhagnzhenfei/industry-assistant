@@ -164,8 +164,7 @@ class DocumentManagementService:
                             port=os.getenv("MILVUS_PORT", "19530")
                         )
 
-                    print(f"🔍 检查Milvus集合: {collection_name}")
-
+   
                     # 强制调用create_collection_sync来检查和可能重建集合
                     # 无论集合是否存在，都要检查schema是否正确
                     config = CollectionConfig(collection_name=collection_name)
@@ -411,6 +410,7 @@ class DocumentManagementService:
 
                     search_time = time.time() - start_time
 
+                    
                     # 对于混合搜索，不在这里过滤，让rerank决定最终结果
                     # 对于纯向量搜索，仍然应用阈值过滤
                     if enable_hybrid_search:
@@ -432,20 +432,15 @@ class DocumentManagementService:
             text_search_results = []
             hybrid_results = vector_filtered_results
 
-            print(f"🔍 混合搜索条件检查: enable_hybrid_search={enable_hybrid_search}")
-
+  
             if enable_hybrid_search:
                 try:
                     # 根据权重决定是否执行文本搜索
                     if text_weight > 0:
-                        print(f"🔄 开始执行BM25文本搜索...")
                         # 文本搜索也获取top_k个结果
                         text_search_results = self._perform_text_search(
                             user_id, query, top_k, text_threshold
                         )
-                        print(f"✅ BM25文本搜索完成，找到 {len(text_search_results)} 个结果")
-                    else:
-                        print(f"⏭️  文本权重为0，跳过BM25文本搜索")
 
                     # 合并搜索结果，应用混合得分阈值过滤
                     hybrid_results = self._merge_search_results(
@@ -470,7 +465,7 @@ class DocumentManagementService:
                 if isinstance(result, dict):
                     # 字典类型的处理
                     milvus_result = MilvusSearchResult(
-                        id=result.get('id', 0),
+                        id=str(result.get('id', '')),  # 转换为字符串避免JS精度丢失
                         score=result.get('score', 0.0),
                         content=result.get('content', ''),
                         doc_id=result.get('doc_id', ''),
@@ -485,17 +480,22 @@ class DocumentManagementService:
                     # 对象类型的处理
                     hybrid_score = getattr(result, 'hybrid_score', getattr(result, 'score', 0.0))
 
+                    # 从 metadata 中获取混合搜索的分数信息
+                    metadata = getattr(result, 'metadata', {}) or {}
+                    text_score = metadata.get('text_score', 0.0)
+                    final_hybrid_score = metadata.get('hybrid_score', hybrid_score)
+
                     milvus_result = MilvusSearchResult(
-                        id=getattr(result, 'id', 0),
-                        score=hybrid_score,
+                        id=str(getattr(result, 'id', '')),  # 转换为字符串避免JS精度丢失
+                        score=final_hybrid_score,
                         content=getattr(result, 'content', ''),
                         doc_id=getattr(result, 'doc_id', ''),
                         doc_name=getattr(result, 'doc_name', ''),
                         category=getattr(result, 'category', ''),
                         source=getattr(result, 'source', ''),
                         chunk_id=getattr(result, 'chunk_id', ''),
-                        text_score=getattr(result, 'text_score', 0.0),
-                        hybrid_score=hybrid_score
+                        text_score=text_score,
+                        hybrid_score=final_hybrid_score
                     )
                 milvus_results.append(milvus_result)
 
@@ -525,8 +525,6 @@ class DocumentManagementService:
 
     def _perform_text_search(self, user_id: str, query: str, top_k: int, text_threshold: float) -> List[dict]:
         """执行基于BM25的文本搜索（优化版本）"""
-        print(f"🔍 开始BM25文本搜索: '{query}' (阈值: {text_threshold})")
-        
         import time
         text_search_start = time.time()
         
@@ -559,8 +557,6 @@ class DocumentManagementService:
             candidate_limit = min(50, top_k * 5)  # 动态调整，但最多50个
             
             # 策略1：先进行快速向量搜索获取相关候选文档
-            print(f"🔍 使用向量搜索预筛选候选文档...")
-            
             pre_filter_start = time.time()
             try:
                 # 生成查询向量
@@ -591,12 +587,9 @@ class DocumentManagementService:
                 if search_results and len(search_results) > 0:
                     results = []
                     for hit in search_results[0]:
-                        # 优先使用chunk_id作为唯一标识，如果没有则使用Milvus内部ID
-                        chunk_id = hit.entity.get('chunk_id', '')
-                        unique_id = chunk_id if chunk_id else str(hit.id)
-
                         result_dict = {
-                            'id': unique_id,
+                            'id': hit.id,
+                            'chunk_id': hit.entity.get('chunk_id', ''),
                             'content': hit.entity.get('content', ''),
                             'content_ltks': hit.entity.get('content_ltks', ''),
                             'doc_id': hit.entity.get('doc_id', ''),
@@ -608,12 +601,10 @@ class DocumentManagementService:
                         results.append(result_dict)
                     
                     pre_filter_time = time.time() - pre_filter_start
-                    print(f"✅ 向量预筛选获得 {len(results)} 个候选文档 (总耗时: {pre_filter_time:.3f}s, Embedding: {embed_time:.3f}s, 搜索: {vec_search_time:.3f}s)")
                 else:
                     results = []
-                    
+
             except Exception as e:
-                print(f"⚠️ 向量预筛选失败，使用随机候选: {e}")
                 import traceback
                 traceback.print_exc()
                 # 降级方案：随机选择
@@ -627,7 +618,6 @@ class DocumentManagementService:
                 return []
             
             # 使用BM25算法进行文本搜索
-            print(f"📊 使用BM25算法处理 {len(results)} 个候选文档")
             
             bm25_start = time.time()
             bm25_searcher = BM25Searcher(k1=1.2, b=0.75)
@@ -649,13 +639,9 @@ class DocumentManagementService:
                 
                 text_results.append(enhanced_result)
             
-            text_search_total_time = time.time() - text_search_start
-            print(f"✅ BM25搜索完成，找到 {len(text_results)} 个匹配结果 (BM25计算耗时: {bm25_time:.3f}s, 总耗时: {text_search_total_time:.3f}s)")
-            
             return text_results
 
         except Exception as e:
-            print(f"❌ BM25文本搜索失败: {e}")
             return []
 
     def _merge_search_results(self, vector_results: List, text_results: List,
@@ -739,7 +725,6 @@ class DocumentManagementService:
                     }
 
             # 使用阿里 DashScope Rerank 模型进行智能重排
-            print(f"🔄 使用 DashScope Rerank 模型重排: 合并 {len(merged_dict)} 个结果")
             
             try:
                 # 准备重排数据
@@ -769,18 +754,14 @@ class DocumentManagementService:
                     key=lambda x: x['hybrid_score'],
                     reverse=True
                 )
-                
-                print(f"✅ DashScope Rerank 完成，取前 {top_k} 个结果")
-                
+      
             except Exception as e:
-                print(f"⚠️ DashScope Rerank 失败，使用简单重排: {e}")
                 # 降级到简单重排
                 sorted_results = sorted(
                     merged_dict.values(),
                     key=lambda x: x['hybrid_score'],
                     reverse=True
                 )
-                print(f"🔄 简单重排: 合并 {len(merged_dict)} 个结果，取前 {top_k} 个")
 
             # 更新原始结果的分数并返回
             final_results = []

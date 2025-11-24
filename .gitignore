@@ -266,8 +266,8 @@ docker-compose.override.yml
 # Elasticsearch data
 elasticsearch/
 
-# Milvus data
-milvus/
+# Milvus data (only root level milvus directory)
+/milvus/
 
 # Upload directories
 uploads/

@@ -75,7 +75,7 @@ class MilvusSearchRequest(BaseModel):
 
 class MilvusSearchResult(BaseModel):
     """Milvus搜索结果项模型"""
-    id: int = Field(..., description="向量ID")
+    id: str = Field(..., description="向量ID")  # 改为字符串类型避免JavaScript精度丢失
     score: float = Field(..., description="相似度分数")
     content: str = Field(..., description="文档内容")
     doc_id: str = Field(..., description="文档ID")
