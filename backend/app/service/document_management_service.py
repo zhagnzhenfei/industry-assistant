@@ -921,45 +921,6 @@ class DocumentManagementService:
                     deletion_results['errors'].append(f"Milvus删除失败: {str(milvus_error)}")
                     print(f"删除Milvus数据失败: {milvus_error}")
 
-                # 2. 尝试删除ES中的数据（使用智能删除策略）
-                try:
-                    from service.core.file_parse import get_es_connection
-                    es_connection = get_es_connection()
-                    
-                    if es_connection.es_available:
-                        # 使用新的智能删除方法
-                        es_result = es_connection.delete_user_document_data(
-                            file_name=document.file_name,
-                            index_name=user_id
-                        )
-                        
-                        # 分析删除结果
-                        if es_result['strategy_used'] in ['index_not_exists', 'index_empty']:
-                            # 索引不存在或为空，这实际上是正常的
-                            deletion_results['es_deleted'] = True
-                            deletion_results['errors'].append(f"ES状态: {es_result['strategy_used']}")
-                        elif es_result['deleted_count'] > 0:
-                            # 成功删除了文档
-                            deletion_results['es_deleted'] = True
-                        elif es_result['errors']:
-                            # 有错误发生
-                            deletion_results['es_deleted'] = False
-                            deletion_results['errors'].extend(es_result['errors'])
-                        else:
-                            # 没有找到匹配的文档，但这不算错误
-                            deletion_results['es_deleted'] = True
-                            deletion_results['errors'].append("ES中未找到匹配文档")
-                            
-                        print(f"ES删除结果: {es_result}")
-                    else:
-                        deletion_results['errors'].append("ES连接不可用")
-                        deletion_results['es_deleted'] = False
-                        
-                except Exception as es_error:
-                    deletion_results['errors'].append(f"ES删除失败: {str(es_error)}")
-                    deletion_results['es_deleted'] = False
-                    print(f"删除ES数据失败: {es_error}")
-                
                 # 2. 尝试删除物理文件
                 try:
                     if os.path.exists(document.file_path):

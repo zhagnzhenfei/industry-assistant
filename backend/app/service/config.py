@@ -31,9 +31,8 @@ return {
             'serper_api_key': os.environ.get('SERPER_API_KEY'),  # Only use environment variable
             'openai_api_key': os.environ.get('OPENAI_API_KEY'),
             'dashscope_api_key': os.environ.get('DASHSCOPE_API_KEY'),
-            'es_host': os.environ.get('ES_HOST', 'elasticsearch'),
-            'es_port': int(os.environ.get('ES_PORT', '9200')),
-            'policy_index': os.environ.get('POLICY_INDEX', 'policy_documents'),
-            'es_user': os.environ.get('ES_USER', 'elastic'),
-            'es_password': os.environ.get('ES_PASSWORD')  # 必须通过环境变量设置
+            # Milvus配置（替代Elasticsearch）
+            'milvus_host': os.environ.get('MILVUS_HOST', 'localhost'),
+            'milvus_port': int(os.environ.get('MILVUS_PORT', '19530')),
+            'milvus_collection': os.environ.get('MILVUS_COLLECTION', 'document_chunks')
         } 
